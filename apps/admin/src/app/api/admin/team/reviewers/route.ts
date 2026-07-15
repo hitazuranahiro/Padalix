@@ -1,0 +1,6 @@
+import { headers } from "next/headers";
+import { getAdminSession } from "@/lib/admin-session";
+import { auth } from "@/lib/auth";
+import { database } from "@/lib/db";
+
+export async function POST(request:Request){const session=await getAdminSession();if(!session)return Response.json({error:"Unauthorized"},{status:401});const body=await request.json().catch(()=>({}));const email=typeof body.email==="string"?body.email.trim().toLowerCase():"";const name=typeof body.name==="string"?body.name.trim().slice(0,100):"";const password=typeof body.password==="string"?body.password:"";if(!/^\S+@\S+\.\S+$/.test(email)||name.length<2||password.length<12)return Response.json({error:"Name, valid email, and a 12-character temporary password are required."},{status:400});try{const result=await auth.api.createUser({headers:await headers(),body:{email,name,password,role:"compliance_reviewer" as "user"}});await database.query("insert into audit.admin_event(actor_id,action,resource_type,resource_id,metadata) values($1,'reviewer.created','staff_user',$2,$3)",[session.user.id,result.user.id,{email,role:"compliance_reviewer"}]);return Response.json({user:result.user},{status:201});}catch(error){return Response.json({error:error instanceof Error?error.message:"Reviewer creation failed"},{status:400});}}

@@ -1,0 +1,13 @@
+{
+  "name": "padalix",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "dev:admin": "pnpm --filter @padalix/admin dev",
+    "dev:marketing": "pnpm --filter @padalix/marketing dev",
+    "db:migrate": "bash scripts/migrate-local.sh",
+    "build": "pnpm --filter @padalix/marketing build && pnpm --filter @padalix/admin build",
+    "lint": "pnpm --filter @padalix/marketing lint && pnpm --filter @padalix/admin lint",
+    "typecheck": "pnpm --filter @padalix/marketing typecheck && pnpm --filter @padalix/admin typecheck"
+  }
+}

@@ -143,11 +143,13 @@ Only published CMS and public support endpoints may be reached from marketing. R
 ```dotenv
 AUTH_ORIGIN_URL=https://<customer-auth-runtime-origin>
 PLATFORM_API_ORIGIN_URL=https://<go-api-runtime-origin>
+KYC_INGEST_URL=https://admin.padalix.com/api/internal/kyc/cases
+KYC_INGEST_SECRET=<temporary-integration-secret-during-migration>
 NEXT_PUBLIC_APP_ORIGIN=https://app.padalix.com
 NEXT_PUBLIC_MARKETING_URL=https://padalix.com
 ```
 
-`AUTH_ORIGIN_URL` and `PLATFORM_API_ORIGIN_URL` are server/edge rewrite configuration. They must not include credentials and should not use the `NEXT_PUBLIC_` prefix.
+`AUTH_ORIGIN_URL`, `PLATFORM_API_ORIGIN_URL`, `KYC_INGEST_URL`, and `KYC_INGEST_SECRET` are server-only configuration. The ingestion secret must match the administrator project, must never use the `NEXT_PUBLIC_` prefix, and should be replaced by service identity when the Go platform API takes ownership of KYC.
 
 ### Administrator Vercel project
 

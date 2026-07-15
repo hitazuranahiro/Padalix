@@ -26,6 +26,8 @@ type CameraMode = "document" | "selfie";
 export function VerificationFlow() {
   const [step, setStep] = useState(0);
   const [country, setCountry] = useState("PH");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [documentType, setDocumentType] = useState("passport");
   const [documentImage, setDocumentImage] = useState<string | null>(null);
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
@@ -34,6 +36,8 @@ export function VerificationFlow() {
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submissionReference, setSubmissionReference] = useState("");
+  const [submissionError, setSubmissionError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -105,9 +109,29 @@ export function VerificationFlow() {
 
   async function submitVerification() {
     setSubmitting(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 1700));
-    setSubmitting(false);
-    setSubmitted(true);
+    setSubmissionError("");
+    try {
+      const response = await fetch("/api/kyc/cases", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          fullName,
+          email,
+          countryCode: country,
+          documentType: documentType === "national-id" ? "national_id" : documentType === "license" ? "drivers_license" : "passport",
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.reference) throw new Error(result.error || "Verification could not be submitted.");
+      setSubmissionReference(result.reference);
+      setDocumentImage(null);
+      setSelfieImage(null);
+      setSubmitted(true);
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : "Verification could not be submitted.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const countryName = country === "PH" ? "Philippines" : country === "US" ? "United States" : country === "GB" ? "United Kingdom" : country === "SG" ? "Singapore" : country === "AE" ? "United Arab Emirates" : country === "JP" ? "Japan" : country === "CA" ? "Canada" : "Australia";
@@ -149,7 +173,7 @@ export function VerificationFlow() {
               <h2>Your identity check is ready for review.</h2>
               <span>Automated checks will assess document authenticity and liveness. A reviewer will step in when a decision needs human judgment.</span>
               <dl>
-                <div><dt>Reference</dt><dd>PDX-KYC-PREVIEW</dd></div>
+                <div><dt>Reference</dt><dd>{submissionReference}</dd></div>
                 <div><dt>Expected update</dt><dd>Within 24 hours</dd></div>
                 <div><dt>Account access</dt><dd>Basic remains active</dd></div>
               </dl>
@@ -176,8 +200,12 @@ export function VerificationFlow() {
             <div className="kyc-panel">
               <div className="panel-icon"><FileCheck2 size={25} /></div>
               <p>STEP 02 / IDENTITY</p>
-              <h2>Choose your document.</h2>
-              <span>Use a valid, unexpired government document. The name must match your Padalix account.</span>
+              <h2>Confirm your identity.</h2>
+              <span>Enter your legal details, then choose a valid, unexpired government document.</span>
+              <div className="identity-fields">
+                <label className="kyc-field"><span>FULL LEGAL NAME</span><input autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="As shown on your document" /></label>
+                <label className="kyc-field"><span>EMAIL ADDRESS</span><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label>
+              </div>
               <div className="document-options">
                 {[{ id: "passport", label: "Passport", note: "Photo page" }, { id: "national-id", label: "National identity card", note: "Front and back" }, { id: "license", label: "Driver's license", note: "Front and back" }].map((item) => (
                   <button className={documentType === item.id ? "selected" : ""} key={item.id} onClick={() => setDocumentType(item.id)}>
@@ -185,7 +213,7 @@ export function VerificationFlow() {
                   </button>
                 ))}
               </div>
-              <div className="kyc-actions"><button className="kyc-back" onClick={() => setStep(0)}><ArrowLeft size={17} /> BACK</button><button className="kyc-primary" onClick={() => setStep(2)}>USE THIS DOCUMENT <ArrowRight size={17} /></button></div>
+              <div className="kyc-actions"><button className="kyc-back" onClick={() => setStep(0)}><ArrowLeft size={17} /> BACK</button><button className="kyc-primary" disabled={fullName.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(email)} onClick={() => setStep(2)}>USE THIS DOCUMENT <ArrowRight size={17} /></button></div>
             </div>
           ) : step === 2 ? (
             <div className="kyc-panel capture-panel">
@@ -243,14 +271,17 @@ export function VerificationFlow() {
               <h2>Confirm and submit.</h2>
               <span>Check the verification package before sending it for automated qualification and, when needed, manual review.</span>
               <dl className="review-list">
+                <div><dt>Legal name</dt><dd>{fullName}</dd></div>
+                <div><dt>Email</dt><dd>{email}</dd></div>
                 <div><dt>Country</dt><dd>{countryName}</dd></div>
                 <div><dt>Document</dt><dd>{documentName}</dd></div>
                 <div><dt>Evidence</dt><dd><Check size={14} /> Document and selfie ready</dd></div>
                 <div><dt>Target level</dt><dd>Verified account</dd></div>
               </dl>
               <label className="consent-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><i>{consent && <Check size={13} />}</i><span>I consent to document authenticity, facial matching, liveness, fraud-prevention, and regulatory screening checks described in the privacy notice.</span></label>
+              {submissionError && <p className="submission-error">{submissionError}</p>}
               <div className="kyc-actions"><button className="kyc-back" onClick={() => setStep(3)}><ArrowLeft size={17} /> BACK</button><button className="kyc-primary" disabled={!consent || submitting} onClick={() => void submitVerification()}>{submitting ? <><RefreshCw className="spin" size={17} /> PROCESSING</> : <>SUBMIT SECURELY <ArrowRight size={17} /></>}</button></div>
-              <small className="preview-notice">PREVIEW ENVIRONMENT / NO IDENTITY DATA IS TRANSMITTED</small>
+              <small className="preview-notice">SECURE SUBMISSION / REVIEW STATUS WILL APPEAR IN YOUR ACCOUNT</small>
             </div>
           )}
         </section>

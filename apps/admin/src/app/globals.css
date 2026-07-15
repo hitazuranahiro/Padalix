@@ -1,4 +1,5 @@
 :root { --black:#050505; --ink:#111; --white:#f5f5f1; --paper:#e9e9e4; --line:#2a2a2a; --light-line:#c9c9c3; --muted:#8d8d87; --signal:#37f27f; --header:68px; }
+.kyc-queue .kyc-summary{padding-right:10px;gap:16px;justify-content:flex-start}.kyc-queue .kyc-summary span:nth-child(2){margin-left:auto}.kyc-queue .kyc-summary button{display:grid;width:26px;height:26px;place-items:center;border:1px solid var(--line);color:var(--muted);background:transparent}.kyc-queue .kyc-summary button:hover:not(:disabled){color:var(--signal);border-color:var(--signal)}.kyc-queue .kyc-summary button:disabled{cursor:not-allowed;opacity:.5}
 * { box-sizing:border-box; }
 html, body { min-height:100%; }
 body { margin:0; color:var(--white); background:var(--black); font-family:Arial, sans-serif; font-size:14px; }

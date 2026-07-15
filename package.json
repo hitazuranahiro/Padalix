@@ -5,7 +5,7 @@
   "scripts": {
     "dev:admin": "pnpm --filter @padalix/admin dev",
     "dev:marketing": "pnpm --filter @padalix/marketing dev",
-    "dev:web": "pnpm --filter @padalix/web dev",
+    "dev:web": "bash scripts/dev-web-local.sh",
     "db:migrate": "bash scripts/migrate-local.sh",
     "build": "pnpm --filter @padalix/marketing build && pnpm --filter @padalix/admin build && pnpm --filter @padalix/web build",
     "lint": "pnpm --filter @padalix/marketing lint && pnpm --filter @padalix/admin lint && pnpm --filter @padalix/web lint",

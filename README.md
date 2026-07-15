@@ -30,6 +30,7 @@ docker compose up -d
 pnpm db:migrate
 pnpm dev:marketing
 pnpm dev:admin
+pnpm dev:web
 ```
 
 See `apps/admin/README.md` for PostgreSQL, first-administrator, and Vercel setup.
@@ -38,4 +39,8 @@ See `apps/admin/README.md` for PostgreSQL, first-administrator, and Vercel setup
 
 The Vercel-ready marketing application is now located in [`apps/marketing`](./apps/marketing). It is deployed separately from the future customer PWA and links to that product through `NEXT_PUBLIC_APP_URL`.
 
-For Vercel, use `apps/marketing` as the project root and `padalix.com` as the production domain. The customer PWA remains a separate project at `app.padalix.com`.
+For Vercel, use `apps/marketing` as the marketing project root and `padalix.com` as its production domain.
+
+## Customer PWA
+
+The first main-application slice lives in [`apps/web`](./apps/web) and runs separately at `app.padalix.com`. It includes the product dashboard, basic-account capability gates, quote preview, payments entry points, activity, and international identity-verification flow. The standalone customer auth service and Go platform API remain explicit integration boundaries; the current UI does not submit financial mutations or identity documents.

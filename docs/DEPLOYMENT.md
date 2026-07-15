@@ -28,7 +28,7 @@ flowchart TB
 | Surface | Production address | Deployment | Responsibility |
 | --- | --- | --- | --- |
 | Marketing | `https://padalix.com` and `https://www.padalix.com` | Vercel, `apps/marketing` | Public content, documentation, help entry point |
-| Customer PWA | `https://app.padalix.com` | Separate Vercel project, future `apps/web` | Account, payments, `/verification`, KYC status |
+| Customer PWA | `https://app.padalix.com` | Separate Vercel project, `apps/web` | Account, payments, `/verification`, KYC status |
 | Administrator | `https://admin.padalix.com` | Separate Vercel project, `apps/admin` | CMS, support, KYC review, operations |
 | Customer auth | First-party path `https://app.padalix.com/api/auth/*` | Standalone TypeScript service behind a Vercel rewrite or edge proxy | Customer registration, verification, sessions, JWT/JWKS |
 | Platform API | First-party path `https://app.padalix.com/api/v1/*` | Container platform with private networking | Go business rules, KYC policy, payments, signed uploads |
@@ -115,7 +115,7 @@ Create three independent projects from the same repository:
 | Project | Root directory | Domain | Notes |
 | --- | --- | --- | --- |
 | Marketing | `apps/marketing` | `padalix.com` | Existing deployable |
-| Customer | `apps/web` when created | `app.padalix.com` | PWA and first-party API rewrites |
+| Customer | `apps/web` | `app.padalix.com` | PWA and first-party API rewrites |
 | Admin | `apps/admin` | `admin.padalix.com` | Existing deployable; no public sign-up |
 
 For each project, select the matching root directory, use `pnpm`, and keep preview and production variables separate. Protect preview deployments because preview URLs can otherwise call staging services from uncontrolled origins. Production secrets belong in Vercel encrypted environment variables, never in `NEXT_PUBLIC_*` values or committed `.env` files.

@@ -1,14 +1,14 @@
-import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BookOpen, Check, ShieldCheck } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { InteriorFooter } from "@/components/interior-footer";
 import { loadSiteContent } from "@/lib/site-content";
+import { pageMetadata } from "@/lib/metadata";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.padalix.com";
 
-export const metadata: Metadata = { title: "Padalix Documentation", description: "How to set up, fund, send, distribute, receive, and track money with Padalix." };
+export const metadata = pageMetadata("Padalix Documentation", "How to set up, fund, send, distribute, receive, and track money with Padalix.", "/docs");
 
 export default async function DocsPage() {
   const content = await loadSiteContent();

@@ -1,14 +1,14 @@
-import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowDown, ArrowRight, ArrowUpRight } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { InteriorFooter } from "@/components/interior-footer";
 import { loadSiteContent } from "@/lib/site-content";
+import { pageMetadata } from "@/lib/metadata";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.padalix.com";
 
-export const metadata: Metadata = { title: "About Padalix", description: "The Filipino story and payment infrastructure behind Padalix." };
+export const metadata = pageMetadata("About Padalix", "The Filipino story and payment infrastructure behind Padalix.", "/about");
 
 export default async function AboutPage() {
   const content = await loadSiteContent();

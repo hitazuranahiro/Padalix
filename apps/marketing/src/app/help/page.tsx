@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, CircleHelp, Mail, ShieldCheck } from "lucide-react";
@@ -6,10 +5,11 @@ import { SiteHeader } from "@/components/site-header";
 import { InteriorFooter } from "@/components/interior-footer";
 import { SupportTicketForm } from "@/components/support-ticket-form";
 import { loadSiteContent } from "@/lib/site-content";
+import { pageMetadata } from "@/lib/metadata";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.padalix.com";
 
-export const metadata: Metadata = { title: "Padalix Help", description: "Guidance for Padalix accounts, transfers, receiving, security, and payment status." };
+export const metadata = pageMetadata("Padalix Help", "Guidance for Padalix accounts, transfers, receiving, security, and payment status.", "/help");
 
 export default async function HelpPage() {
   const content = await loadSiteContent();

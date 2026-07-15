@@ -12,9 +12,16 @@ import {
 } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { SiteHeader } from "@/components/site-header";
+import { pageMetadata } from "@/lib/metadata";
 import { loadSiteContent } from "@/lib/site-content";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.padalix.com";
+
+export const metadata = pageMetadata(
+  "Padalix | Money Moves Forward",
+  "Padalix connects modern payment infrastructure to clearer, faster cross-border remittances for families and businesses.",
+  "/"
+);
 
 function RouteSymbol() {
   return (

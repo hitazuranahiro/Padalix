@@ -11,6 +11,8 @@ for migration in \
   003_content_assets.sql \
   004_support_system.sql \
   005_kyc_compliance.sql \
-  006_kyc_automation_and_capabilities.sql; do
+  006_kyc_automation_and_capabilities.sql \
+  007_customer_auth.sql \
+  008_platform_mvp.sql; do
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT_DIR/apps/admin/sql/$migration"
 done

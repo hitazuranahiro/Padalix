@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { getCustomerSession } from "@/lib/session";
 
 const documentTypes = ["passport", "national_id", "drivers_license"] as const;
 type DocumentType = (typeof documentTypes)[number];
@@ -8,6 +9,8 @@ function clean(value: unknown, max: number) {
 }
 
 export async function POST(request: Request) {
+  const session = await getCustomerSession();
+  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const ingestUrl = process.env.KYC_INGEST_URL;
   const ingestSecret = process.env.KYC_INGEST_SECRET;
   const requestOrigin = request.headers.get("origin");
@@ -20,8 +23,8 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const fullName = clean(body.fullName, 150);
-  const email = clean(body.email, 254).toLowerCase();
+  const fullName = clean(session.user.name, 150);
+  const email = clean(session.user.email, 254).toLowerCase();
   const countryCode = clean(body.countryCode, 2).toUpperCase();
   const documentType = clean(body.documentType, 40) as DocumentType;
 
@@ -35,7 +38,7 @@ export async function POST(request: Request) {
   }
 
   const submissionId = randomUUID();
-  const authSubject = `pwa:${createHash("sha256").update(email).digest("hex")}`;
+  const authSubject = session.user.id;
   const evidencePrefix = `pending/${authSubject}/${submissionId}`;
   const documents = [
     {

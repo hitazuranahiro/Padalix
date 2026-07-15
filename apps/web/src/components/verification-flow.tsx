@@ -23,11 +23,11 @@ const steps = ["Location", "Identity", "Document", "Selfie", "Review"];
 
 type CameraMode = "document" | "selfie";
 
-export function VerificationFlow() {
+export function VerificationFlow({ accountName, accountEmail }: { accountName: string; accountEmail: string }) {
   const [step, setStep] = useState(0);
   const [country, setCountry] = useState("PH");
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [fullName] = useState(accountName);
+  const [email] = useState(accountEmail);
   const [documentType, setDocumentType] = useState("passport");
   const [documentImage, setDocumentImage] = useState<string | null>(null);
   const [selfieImage, setSelfieImage] = useState<string | null>(null);
@@ -203,8 +203,8 @@ export function VerificationFlow() {
               <h2>Confirm your identity.</h2>
               <span>Enter your legal details, then choose a valid, unexpired government document.</span>
               <div className="identity-fields">
-                <label className="kyc-field"><span>FULL LEGAL NAME</span><input autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="As shown on your document" /></label>
-                <label className="kyc-field"><span>EMAIL ADDRESS</span><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label>
+                <label className="kyc-field"><span>ACCOUNT NAME</span><input value={fullName} readOnly /></label>
+                <label className="kyc-field"><span>ACCOUNT EMAIL</span><input type="email" value={email} readOnly /></label>
               </div>
               <div className="document-options">
                 {[{ id: "passport", label: "Passport", note: "Photo page" }, { id: "national-id", label: "National identity card", note: "Front and back" }, { id: "license", label: "Driver's license", note: "Front and back" }].map((item) => (

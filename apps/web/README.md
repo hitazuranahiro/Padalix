@@ -8,9 +8,11 @@ pnpm dev:web
 
 Local URL: `http://localhost:3002`
 
-The current slice uses a basic sandbox member so UI and capability behavior can be validated before the standalone Better Auth service and Go platform API are connected. It does not submit money. The verification flow creates reviewer cases through the same-origin `/api/kyc/cases` server route, which forwards validated identity fields and evidence metadata to the protected ingestion service.
+The application uses customer Better Auth sessions stored in the PostgreSQL `customer_auth` schema. Its first-party API handlers authenticate the browser session and forward member identity to the standalone Go platform API using a server-only service token. The Go service is authoritative for account provisioning, balances, quotes, verification gates, recipients, transfers, idempotency, and activity.
 
-For local development, configure `KYC_INGEST_SECRET` in the ignored `apps/admin/.env.local` file and start the app with the root `pnpm dev:web` command. The local launcher reads only that ingestion secret and points the PWA at the local administrator endpoint. The secret must never be exposed as a `NEXT_PUBLIC_*` variable. Captured image bytes remain in the browser until private object-storage signed uploads are implemented; reviewers currently receive pending evidence metadata rather than image contents.
+For local development, configure the administrator database, auth secret, and `KYC_INGEST_SECRET` in the ignored `apps/admin/.env.local` file. Run migrations, start `pnpm dev:platform`, then start `pnpm dev:web`. The local launchers derive separate customer-auth and platform service credentials without writing them to disk. These development derivations are not a production secret-management strategy.
+
+Captured KYC image bytes remain in the browser until private object-storage signed uploads are implemented; reviewers currently receive pending evidence metadata rather than image contents. The transfer workflow is sandbox-only and records simulated confirmation in PostgreSQL. It must not be presented as real settlement.
 
 Production integrations must use the same-origin `/api/auth/*` and `/api/v1/*` boundaries described in `docs/DEPLOYMENT.md`.
 

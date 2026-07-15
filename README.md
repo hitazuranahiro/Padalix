@@ -30,6 +30,7 @@ docker compose up -d
 pnpm db:migrate
 pnpm dev:marketing
 pnpm dev:admin
+pnpm dev:platform
 pnpm dev:web
 ```
 
@@ -43,4 +44,6 @@ For Vercel, use `apps/marketing` as the marketing project root and `padalix.com`
 
 ## Customer PWA
 
-The first main-application slice lives in [`apps/web`](./apps/web) and runs separately at `app.padalix.com`. It includes the product dashboard, basic-account capability gates, quote preview, payments entry points, activity, and international identity-verification flow. KYC submissions now create cases in the protected reviewer queue through a server-only ingestion proxy. Captured image bytes will move to private object storage when signed uploads are connected; the current handoff records identity fields and pending evidence metadata. The standalone customer auth service and Go platform API remain explicit integration boundaries, and the UI does not submit financial mutations.
+The customer application lives in [`apps/web`](./apps/web) and runs separately at `app.padalix.com`. It now includes customer Better Auth sessions, PostgreSQL-backed sandbox accounts and wallets, exact server-generated quotes, saved recipients, verified-only idempotent transfers, activity history, account capability gates, and international identity verification. The standalone Go service is in [`services/platform`](./services/platform).
+
+KYC submissions create cases in the protected reviewer queue through a server-only ingestion proxy. Captured image bytes will move to private object storage when signed uploads are connected; the current handoff records identity fields and pending evidence metadata. Money movement is an explicit sandbox ledger and is not a connection to a licensed payment rail.

@@ -143,13 +143,18 @@ Only published CMS and public support endpoints may be reached from marketing. R
 ```dotenv
 AUTH_ORIGIN_URL=https://<customer-auth-runtime-origin>
 PLATFORM_API_ORIGIN_URL=https://<go-api-runtime-origin>
+PLATFORM_INTERNAL_TOKEN=<pwa-to-platform-service-token>
 KYC_INGEST_URL=https://admin.padalix.com/api/internal/kyc/cases
 KYC_INGEST_SECRET=<temporary-integration-secret-during-migration>
+DATABASE_URL=postgresql://<customer-auth-role>:<secret>@<pooler>/<database>?sslmode=require
+BETTER_AUTH_SECRET=<customer-auth-secret>
+BETTER_AUTH_URL=https://app.padalix.com
+BETTER_AUTH_TRUSTED_ORIGINS=https://app.padalix.com
 NEXT_PUBLIC_APP_ORIGIN=https://app.padalix.com
 NEXT_PUBLIC_MARKETING_URL=https://padalix.com
 ```
 
-`AUTH_ORIGIN_URL`, `PLATFORM_API_ORIGIN_URL`, `KYC_INGEST_URL`, and `KYC_INGEST_SECRET` are server-only configuration. The ingestion secret must match the administrator project, must never use the `NEXT_PUBLIC_` prefix, and should be replaced by service identity when the Go platform API takes ownership of KYC.
+`PLATFORM_API_ORIGIN_URL`, `PLATFORM_INTERNAL_TOKEN`, `KYC_INGEST_URL`, `KYC_INGEST_SECRET`, `DATABASE_URL`, and Better Auth secrets are server-only configuration. The ingestion secret must match the administrator project, must never use the `NEXT_PUBLIC_` prefix, and should be replaced by service identity when the Go platform API takes ownership of KYC. Customer authentication currently runs in the PWA Next.js runtime with tables isolated in `customer_auth`; it can move to the documented standalone auth deployment without changing browser routes.
 
 ### Administrator Vercel project
 
@@ -186,6 +191,7 @@ EMAIL_OUTBOX_MODE=database
 
 ```dotenv
 DATABASE_URL=postgresql://<platform-role>:<secret>@<private-db-host>/<database>?sslmode=require
+PLATFORM_INTERNAL_TOKEN=<matching-pwa-to-platform-service-token>
 AUTH_JWKS_URL=https://<auth-runtime-origin>/.well-known/jwks.json
 AUTH_ISSUER=https://app.padalix.com/api/auth
 AUTH_AUDIENCE=padalix-platform-api

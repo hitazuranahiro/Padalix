@@ -35,7 +35,7 @@ func main() {
 
 	service := platform.New(pool, internalToken)
 	server := &http.Server{
-		Addr:              env("PLATFORM_LISTEN_ADDR", "127.0.0.1:8080"),
+		Addr:              listenAddress(),
 		Handler:           service.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
@@ -66,4 +66,14 @@ func env(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func listenAddress() string {
+	if address := os.Getenv("PLATFORM_LISTEN_ADDR"); address != "" {
+		return address
+	}
+	if port := os.Getenv("PORT"); port != "" {
+		return ":" + port
+	}
+	return "127.0.0.1:8080"
 }

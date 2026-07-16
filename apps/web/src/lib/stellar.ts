@@ -22,6 +22,47 @@ export type StellarWalletChallenge = {
   expiresAt: string;
 };
 
+export type StellarPaymentConfig = {
+  enabled: boolean;
+  network: "testnet";
+  assetCode: string;
+  issuer?: string;
+};
+
+export type StellarBalance = {
+  assetCode: string;
+  issuer?: string;
+  balance: string;
+};
+
+export type StellarBalanceList = {
+  publicKey: string;
+  network: "testnet";
+  balances: StellarBalance[];
+};
+
+export type StellarPayment = {
+  id: string;
+  reference: string;
+  status: "prepared" | "submitted" | "confirmed" | "failed" | "expired";
+  network: "testnet";
+  networkPassphrase: string;
+  source: string;
+  destination: string;
+  assetCode: string;
+  assetIssuer?: string;
+  amount: string;
+  transaction: string;
+  transactionHash: string;
+  submissionStatus?: string;
+  ledger?: number;
+  expiresAt: string;
+  submittedAt?: string;
+  confirmedAt?: string;
+  receiptUrl?: string;
+  explorerUrl: string;
+};
+
 export const STELLAR_NETWORK: StellarNetwork =
   process.env.NEXT_PUBLIC_STELLAR_NETWORK === "mainnet" ? "mainnet" : "testnet";
 

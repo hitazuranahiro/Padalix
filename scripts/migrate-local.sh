@@ -18,6 +18,7 @@ for migration in \
   010_status_system.sql \
   011_customer_passkeys.sql \
   012_stellar_wallet_links.sql \
-  013_transfer_receipts.sql; do
+  013_transfer_receipts.sql \
+  014_stellar_testnet_payments.sql; do
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT_DIR/apps/admin/sql/$migration"
 done

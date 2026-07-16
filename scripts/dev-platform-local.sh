@@ -12,5 +12,10 @@ if [[ -z "$DATABASE_URL" || -z "$ADMIN_AUTH_SECRET" ]]; then echo "Admin databas
 export DATABASE_URL
 export PLATFORM_INTERNAL_TOKEN="$(printf 'padalix-platform:%s' "$ADMIN_AUTH_SECRET" | shasum -a 256 | awk '{print $1}')"
 export PLATFORM_LISTEN_ADDR="${PLATFORM_LISTEN_ADDR:-127.0.0.1:8080}"
+export STELLAR_TESTNET_PAYMENTS_ENABLED="${STELLAR_TESTNET_PAYMENTS_ENABLED:-true}"
+export STELLAR_NETWORK="${STELLAR_NETWORK:-testnet}"
+export STELLAR_RPC_URL="${STELLAR_RPC_URL:-https://soroban-testnet.stellar.org}"
+export STELLAR_HORIZON_URL="${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}"
+export STELLAR_PAYMENT_ASSET_CODE="${STELLAR_PAYMENT_ASSET_CODE:-XLM}"
 cd "$ROOT_DIR/services/platform"
 exec go run ./cmd/api

@@ -22,6 +22,7 @@ type Service struct {
 	db                *pgxpool.Pool
 	internalToken     string
 	stellarWalletAuth *StellarWalletAuth
+	stellarPayments   *StellarPaymentService
 }
 
 type identity struct {
@@ -56,7 +57,11 @@ func New(db *pgxpool.Pool, internalToken string) *Service {
 }
 
 func NewWithStellarWalletAuth(db *pgxpool.Pool, internalToken string, auth *StellarWalletAuth) *Service {
-	return &Service{db: db, internalToken: internalToken, stellarWalletAuth: auth}
+	return NewWithStellarServices(db, internalToken, auth, nil)
+}
+
+func NewWithStellarServices(db *pgxpool.Pool, internalToken string, auth *StellarWalletAuth, payments *StellarPaymentService) *Service {
+	return &Service{db: db, internalToken: internalToken, stellarWalletAuth: auth, stellarPayments: payments}
 }
 
 func (s *Service) Handler() http.Handler {
@@ -78,6 +83,11 @@ func (s *Service) Handler() http.Handler {
 	mux.Handle("POST /v1/stellar-wallets/verify", s.authenticate(http.HandlerFunc(s.verifyStellarWalletChallenge)))
 	mux.Handle("GET /v1/stellar-wallets", s.authenticate(http.HandlerFunc(s.listStellarWallets)))
 	mux.Handle("DELETE /v1/stellar-wallets/{walletID}", s.authenticate(http.HandlerFunc(s.unlinkStellarWallet)))
+	mux.Handle("GET /v1/stellar-wallets/{walletID}/balances", s.authenticate(http.HandlerFunc(s.stellarWalletBalances)))
+	mux.Handle("GET /v1/stellar-payments/config", s.authenticate(http.HandlerFunc(s.stellarPaymentConfig)))
+	mux.Handle("POST /v1/stellar-payments/prepare", s.authenticate(http.HandlerFunc(s.prepareStellarPayment)))
+	mux.Handle("POST /v1/stellar-payments/{paymentID}/submit", s.authenticate(http.HandlerFunc(s.submitStellarPayment)))
+	mux.Handle("GET /v1/stellar-payments/{paymentID}", s.authenticate(http.HandlerFunc(s.getStellarPayment)))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Content-Type-Options", "nosniff")

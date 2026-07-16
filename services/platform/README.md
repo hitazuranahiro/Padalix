@@ -34,6 +34,11 @@ All `/v1/*` routes require the server-only `PLATFORM_INTERNAL_TOKEN` plus identi
 - `POST /v1/stellar-wallets/verify`
 - `GET /v1/stellar-wallets`
 - `DELETE /v1/stellar-wallets/{walletID}`
+- `GET /v1/stellar-wallets/{walletID}/balances`
+- `GET /v1/stellar-payments/config`
+- `POST /v1/stellar-payments/prepare`
+- `POST /v1/stellar-payments/{paymentID}/submit`
+- `GET /v1/stellar-payments/{paymentID}`
 
 ## Stellar Wallet Ownership
 
@@ -74,6 +79,37 @@ The default and only implicit network is testnet. Setting
 proofs only; it does not enable deposits, withdrawals, transaction signing, or
 value movement.
 
+## Stellar Testnet Payments
+
+The first real-network payment vertical slice is testnet-only. Padalix prepares
+an exact payment envelope with a five-minute timeout and reference memo. The
+customer wallet signs that envelope locally; the API verifies its hash, source,
+and signature before submitting it to Stellar RPC. Confirmation writes the
+transaction hash and ledger into the existing Padalix receipt evidence stream.
+No customer secret key or signed envelope is stored.
+
+Configure these server-only variables on the `services/platform` deployment:
+
+```dotenv
+STELLAR_TESTNET_PAYMENTS_ENABLED=true
+STELLAR_NETWORK=testnet
+STELLAR_RPC_URL=https://soroban-testnet.stellar.org
+STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
+STELLAR_PAYMENT_ASSET_CODE=XLM
+# Required only when STELLAR_PAYMENT_ASSET_CODE is not XLM:
+# STELLAR_PAYMENT_ASSET_ISSUER=G...
+```
+
+Enabling payments while `STELLAR_NETWORK` is anything other than `testnet`
+causes startup to fail. Native XLM is the initial demonstration asset. A credit
+asset such as testnet USDC requires its exact issuer and user trustlines before
+it should be enabled.
+
 Payment methods come from the connector catalog and are enabled per provider, environment, country, and currency. A provider cannot be activated in production without an external credential reference. Provider secrets and raw payout instruments must live in a vault, never in these tables.
 
-Transfers are deterministic sandbox ledger operations. They require a verified member, an active quote, sufficient sandbox balance, and an idempotency key. A licensed payout integration, asynchronous settlement worker, signed webhook processing, and reconciliation remain production requirements.
+Sandbox transfers remain deterministic internal ledger operations and are kept
+separate from `stellar_testnet` transfers. Testnet transfers require a verified
+member, a verified testnet wallet, a funded destination, and an idempotency key.
+A licensed payout integration, asynchronous settlement worker, signed webhook
+processing, treasury controls, and reconciliation remain production mainnet
+requirements.

@@ -22,6 +22,10 @@ All `/v1/*` routes require the server-only `PLATFORM_INTERNAL_TOKEN` plus identi
 - `GET /v1/dashboard`
 - `GET /v1/payment-methods`
 - `GET /v1/activity`
+- `GET /v1/transfers`
+- `GET /v1/transfers/{reference}`
+- `GET /v1/transfers/{reference}/receipt`
+- `GET /v1/exports/transfers`
 - `GET /v1/recipients`
 - `POST /v1/recipients`
 - `POST /v1/quotes`

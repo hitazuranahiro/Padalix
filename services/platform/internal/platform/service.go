@@ -70,6 +70,10 @@ func (s *Service) Handler() http.Handler {
 	mux.Handle("POST /v1/recipients", s.authenticate(http.HandlerFunc(s.createRecipient)))
 	mux.Handle("POST /v1/quotes", s.authenticate(http.HandlerFunc(s.createQuote)))
 	mux.Handle("POST /v1/transfers", s.authenticate(http.HandlerFunc(s.createTransfer)))
+	mux.Handle("GET /v1/transfers", s.authenticate(http.HandlerFunc(s.listTransfers)))
+	mux.Handle("GET /v1/transfers/{reference}", s.authenticate(http.HandlerFunc(s.getTransfer)))
+	mux.Handle("GET /v1/transfers/{reference}/receipt", s.authenticate(http.HandlerFunc(s.exportTransferReceipt)))
+	mux.Handle("GET /v1/exports/transfers", s.authenticate(http.HandlerFunc(s.exportTransfers)))
 	mux.Handle("POST /v1/stellar-wallets/challenge", s.authenticate(http.HandlerFunc(s.createStellarWalletChallenge)))
 	mux.Handle("POST /v1/stellar-wallets/verify", s.authenticate(http.HandlerFunc(s.verifyStellarWalletChallenge)))
 	mux.Handle("GET /v1/stellar-wallets", s.authenticate(http.HandlerFunc(s.listStellarWallets)))
@@ -400,6 +404,13 @@ func (s *Service) createTransfer(w http.ResponseWriter, r *http.Request) {
 	_, err = tx.Exec(r.Context(), `insert into platform.transfer(id,reference,account_id,quote_id,recipient_id,recipient_name,source_asset,destination_currency,source_amount,destination_amount,fee_amount,status,idempotency_key,confirmed_at) values($1,$2,$3,$4,nullif($5,''),$6,$7,$8,$9,$10,$11,'confirmed',$12,now())`, transferID, reference, acct.ID, input.QuoteID, input.RecipientID, strings.TrimSpace(input.RecipientName), sourceAsset, destinationCurrency, sourceAmount, destinationAmount, feeAmount, idem)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "transfer could not be recorded")
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `insert into platform.transfer_evidence_event(
+		id,transfer_id,evidence_type,provider_key,provider_environment,provider_transaction_id,
+		provider_reference,provider_status,recorded_at
+	) values($1,$2,'provider_receipt','padalix_sandbox','sandbox',$3,$4,'confirmed',now())`, newID(), transferID, transferID, reference); err != nil {
+		writeError(w, http.StatusInternalServerError, "transfer evidence could not be recorded")
 		return
 	}
 	if _, err := tx.Exec(r.Context(), `update platform.quote set status='consumed' where id=$1`, input.QuoteID); err != nil {

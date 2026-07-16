@@ -105,3 +105,41 @@ html{-webkit-text-size-adjust:100%}body{min-height:100dvh;overflow-x:hidden;over
   .kyc-stage{min-height:calc(100dvh - 184px - var(--safe-top));padding-right:calc(18px + var(--safe-right));padding-bottom:calc(44px + var(--safe-bottom));padding-left:calc(18px + var(--safe-left))}
   .offline-page{padding-top:calc(24px + var(--safe-top));padding-right:calc(18px + var(--safe-right));padding-bottom:calc(24px + var(--safe-bottom));padding-left:calc(18px + var(--safe-left))}
 }
+
+/* Interaction polish: crisp type, stable metrics, and tactile controls. */
+:root{
+  --shadow-control:0 0 0 1px rgba(255,255,255,.09),0 1px 2px rgba(0,0,0,.25),0 8px 24px rgba(0,0,0,.12);
+  --shadow-control-hover:0 0 0 1px rgba(255,255,255,.15),0 2px 4px rgba(0,0,0,.3),0 12px 30px rgba(0,0,0,.16);
+  --shadow-light:0 0 0 1px rgba(0,0,0,.07),0 1px 2px -1px rgba(0,0,0,.08),0 5px 16px rgba(0,0,0,.05);
+}
+html{-moz-osx-font-smoothing:grayscale}
+h1,h2,h3{text-wrap:balance}
+p,li,figcaption{text-wrap:pretty}
+.balance-main>strong,.balance-side>strong,.recent-activity small,.amount-input input,.quote-review>div strong,.quote-form dd,.package-summary strong,.review-list dd,.kyc-success dd{font-variant-numeric:tabular-nums}
+:where(a,button,input,select,textarea):focus-visible{outline:2px solid var(--signal);outline-offset:3px}
+.flow-page :where(input,select,textarea):focus-visible,.verification-page :where(input,select,textarea):focus-visible,.kyc-stage :where(input,select,textarea):focus-visible{outline-color:var(--black)}
+.app-sidebar nav a,.sidebar-secondary a,.sidebar-signout,.app-topbar>a,.mobile-app-nav a,.dashboard-head>a,.balance-main>div a,.capability-panel>a,.quote-review>a,.quote-review>button,.verification-flow section>button,.kyc-primary,.kyc-back,.capture-choice>button,.liveness-intro>button,.capture-preview>button,.customer-auth-form>button,.pwa-passkey-signin>button,.pwa-install-action{
+  transition-property:transform,background-color,color,box-shadow,opacity;
+  transition-duration:160ms;
+  transition-timing-function:cubic-bezier(.2,0,0,1);
+}
+.app-topbar>a,.balance-main header button,.swap-command,.pwa-install-close{min-width:40px;min-height:40px}
+.dashboard-head>a,.balance-main>div a,.capability-panel>a,.quote-review>a,.quote-review>button,.verification-flow section>button,.kyc-primary,.capture-choice>button,.liveness-intro>button,.customer-auth-form>button,.pwa-passkey-signin>button,.pwa-install-action{box-shadow:var(--shadow-control)}
+.flow-page .quote-review>a,.flow-page .quote-review>button,.verification-flow section>button,.kyc-primary,.capture-choice>button,.liveness-intro>button,.customer-auth-form>button{box-shadow:var(--shadow-light)}
+.app-sidebar nav a[aria-current="page"] svg,.mobile-app-nav a[aria-current="page"] svg{transform:translateY(-1px)}
+.mobile-app-nav a{position:relative;min-width:0;min-height:44px}
+.mobile-app-nav a::before{content:"";position:absolute;top:0;left:50%;width:22px;height:2px;background:var(--signal);opacity:0;transform:translateX(-50%) scaleX(.25);transition-property:transform,opacity;transition-duration:180ms;transition-timing-function:cubic-bezier(.2,0,0,1)}
+.mobile-app-nav a[aria-current="page"]::before{opacity:1;transform:translateX(-50%) scaleX(1)}
+@media(hover:hover){
+  .dashboard-head>a:hover,.balance-main>div a:hover,.capability-panel>a:hover,.quote-review>a:hover,.quote-review>button:hover,.verification-flow section>button:hover,.kyc-primary:hover,.capture-choice>button:hover,.liveness-intro>button:hover,.customer-auth-form>button:hover,.pwa-passkey-signin>button:hover,.pwa-install-action:hover{box-shadow:var(--shadow-control-hover);transform:translateY(-2px)}
+  .flow-page .quote-review>a:hover,.flow-page .quote-review>button:hover,.verification-flow section>button:hover,.kyc-primary:hover,.capture-choice>button:hover,.liveness-intro>button:hover,.customer-auth-form>button:hover{box-shadow:0 0 0 1px rgba(0,0,0,.1),0 2px 4px -1px rgba(0,0,0,.12),0 8px 20px rgba(0,0,0,.08)}
+}
+:where(.dashboard-head>a,.balance-main>div a,.capability-panel>a,.quote-review>a,.quote-review>button,.verification-flow section>button,.kyc-primary,.kyc-back,.capture-choice>button,.liveness-intro>button,.capture-preview>button,.customer-auth-form>button,.pwa-passkey-signin>button,.pwa-install-action):active{transform:scale(.96)}
+:where(button,[aria-disabled="true"]):disabled{transform:none!important;box-shadow:none}
+@media(max-width:720px){
+  .app-topbar>a,.balance-main header button,.swap-command,.pwa-install-close{min-width:44px;min-height:44px}
+  .sidebar-secondary a,.mobile-app-nav a{min-height:44px}
+}
+@media(prefers-reduced-motion:reduce){
+  .app-sidebar nav a,.sidebar-secondary a,.sidebar-signout,.app-topbar>a,.mobile-app-nav a,.mobile-app-nav a::before,.dashboard-head>a,.balance-main>div a,.capability-panel>a,.quote-review>a,.quote-review>button,.verification-flow section>button,.kyc-primary,.kyc-back,.capture-choice>button,.liveness-intro>button,.capture-preview>button,.customer-auth-form>button,.pwa-passkey-signin>button,.pwa-install-action{transition-duration:.01ms!important;transform:none!important}
+}

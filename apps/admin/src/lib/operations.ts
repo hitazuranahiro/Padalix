@@ -58,11 +58,17 @@ export type OperationsSnapshot = {
   jobs: OperationsJob[];
   exceptions: ReconciliationException[];
   workers: WorkerRuntime[];
+  workerTelemetryReady: boolean;
   queue: QueueHealth;
   generatedAt: string;
 };
 
 export async function getOperationsSnapshot(): Promise<OperationsSnapshot> {
+  const workerSchema = await database.query<{ ready: boolean }>(
+    `select to_regclass('operations.worker_heartbeat') is not null as ready`,
+  );
+  const workerTelemetryReady = workerSchema.rows[0]?.ready === true;
+
   const [transfers, jobs, exceptions, workers, queue] = await Promise.all([
     database.query<OperationsTransfer>(`select t.reference,t.status,t.settlement_mode as "settlementMode",
       t.recipient_name as "recipientName",t.source_asset as "sourceAsset",t.source_amount::text as "sourceAmount",
@@ -80,12 +86,14 @@ export async function getOperationsSnapshot(): Promise<OperationsSnapshot> {
       from platform.reconciliation_exception e join platform.transfer t on t.id=e.transfer_id
       join platform.stellar_payment_intent i on i.id=e.payment_intent_id
       order by case e.status when 'open' then 0 when 'investigating' then 1 else 2 end,e.created_at desc limit 100`),
-    database.query<WorkerRuntime>(`select worker_id as id,service,last_seen_at::text as "lastSeenAt",
-      last_cycle_status as "lastCycleStatus",coalesce(last_error_code,'') as "lastErrorCode",
-      consecutive_errors as "consecutiveErrors",cycles_completed::integer as "cyclesCompleted",
-      greatest(0,extract(epoch from now()-last_seen_at))::integer as "heartbeatAgeSeconds",
-      (last_seen_at >= now()-interval '60 seconds' and last_cycle_status not in ('error','stopped')) as healthy
-      from operations.worker_heartbeat order by last_seen_at desc limit 10`),
+    workerTelemetryReady
+      ? database.query<WorkerRuntime>(`select worker_id as id,service,last_seen_at::text as "lastSeenAt",
+          last_cycle_status as "lastCycleStatus",coalesce(last_error_code,'') as "lastErrorCode",
+          consecutive_errors as "consecutiveErrors",cycles_completed::integer as "cyclesCompleted",
+          greatest(0,extract(epoch from now()-last_seen_at))::integer as "heartbeatAgeSeconds",
+          (last_seen_at >= now()-interval '60 seconds' and last_cycle_status not in ('error','stopped')) as healthy
+          from operations.worker_heartbeat order by last_seen_at desc limit 10`)
+      : Promise.resolve({ rows: [] as WorkerRuntime[] }),
     database.query<QueueHealth>(`with queue as (
       select status,created_at from platform.outbox_job
       union all select status,created_at from notification.outbox
@@ -101,6 +109,7 @@ export async function getOperationsSnapshot(): Promise<OperationsSnapshot> {
     jobs: jobs.rows,
     exceptions: exceptions.rows,
     workers: workers.rows,
+    workerTelemetryReady,
     queue: queue.rows[0] ?? { pending: 0, processing: 0, failed: 0, oldestPendingSeconds: 0 },
     generatedAt: new Date().toISOString(),
   };

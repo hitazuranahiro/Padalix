@@ -55,6 +55,7 @@ func (s *Service) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
 	mux.Handle("GET /v1/account", s.authenticate(http.HandlerFunc(s.getAccount)))
+	mux.Handle("GET /v1/payment-methods", s.authenticate(http.HandlerFunc(s.listPaymentMethods)))
 	mux.Handle("GET /v1/activity", s.authenticate(http.HandlerFunc(s.getActivity)))
 	mux.Handle("GET /v1/recipients", s.authenticate(http.HandlerFunc(s.getRecipients)))
 	mux.Handle("POST /v1/recipients", s.authenticate(http.HandlerFunc(s.createRecipient)))
@@ -214,14 +215,34 @@ func (s *Service) createRecipient(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "account unavailable")
 		return
 	}
-	var input struct{ Name, CountryCode, PayoutMethod, PayoutReference string }
-	if err := decode(r, &input); err != nil || len(strings.TrimSpace(input.Name)) < 2 || len(input.CountryCode) != 2 || !oneOf(input.PayoutMethod, "bank", "wallet", "cash_pickup") || len(strings.TrimSpace(input.PayoutReference)) < 4 {
+	var input struct{ Name, CountryCode, PayoutMethod, PaymentMethodID, PayoutReference string }
+	if err := decode(r, &input); err != nil || len(strings.TrimSpace(input.Name)) < 2 || len(input.CountryCode) != 2 || !oneOf(input.PayoutMethod, "bank", "wallet", "stellar_wallet", "cash_pickup") || len(strings.TrimSpace(input.PayoutReference)) < 4 {
 		writeError(w, http.StatusBadRequest, "invalid recipient")
+		return
+	}
+	input.CountryCode = strings.ToUpper(input.CountryCode)
+	var paymentMethodID, payoutType, countryCode string
+	if input.PaymentMethodID != "" {
+		err = s.db.QueryRow(r.Context(), `select m.id,m.payout_type,m.country_code from platform.payment_method m join platform.payment_connector c on c.id=m.connector_id where m.id=$1 and m.status='active' and c.status='active'`, input.PaymentMethodID).Scan(&paymentMethodID, &payoutType, &countryCode)
+	} else {
+		// Temporary compatibility for clients deployed before the catalog endpoint.
+		err = s.db.QueryRow(r.Context(), `select m.id,m.payout_type,m.country_code from platform.payment_method m join platform.payment_connector c on c.id=m.connector_id where m.payout_type=$1 and m.country_code=$2 and m.status='active' and c.connector_kind='sandbox' and c.status='active' order by m.display_name limit 1`, input.PayoutMethod, input.CountryCode).Scan(&paymentMethodID, &payoutType, &countryCode)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusBadRequest, "payout method unavailable")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "payout method unavailable")
+		return
+	}
+	if payoutType != input.PayoutMethod || countryCode != input.CountryCode {
+		writeError(w, http.StatusBadRequest, "payout method unavailable")
 		return
 	}
 	id := newID()
 	masked := "•••• " + lastFour(strings.TrimSpace(input.PayoutReference))
-	_, err = s.db.Exec(r.Context(), `insert into platform.recipient(id,account_id,display_name,country_code,payout_method,payout_reference_masked) values($1,$2,$3,$4,$5,$6)`, id, acct.ID, strings.TrimSpace(input.Name), strings.ToUpper(input.CountryCode), input.PayoutMethod, masked)
+	_, err = s.db.Exec(r.Context(), `insert into platform.recipient(id,account_id,display_name,country_code,payout_method,payout_reference_masked,payment_method_id) values($1,$2,$3,$4,$5,$6,$7)`, id, acct.ID, strings.TrimSpace(input.Name), input.CountryCode, input.PayoutMethod, masked, paymentMethodID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "recipient could not be saved")
 		return

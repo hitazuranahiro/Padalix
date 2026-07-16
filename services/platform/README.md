@@ -19,10 +19,13 @@ All `/v1/*` routes require the server-only `PLATFORM_INTERNAL_TOKEN` plus identi
 ## Implemented Routes
 
 - `GET /v1/account`
+- `GET /v1/payment-methods`
 - `GET /v1/activity`
 - `GET /v1/recipients`
 - `POST /v1/recipients`
 - `POST /v1/quotes`
 - `POST /v1/transfers`
 
-Transfers are deterministic sandbox ledger operations. They require a verified member, an active quote, sufficient sandbox balance, and an idempotency key. A licensed payout integration, double-entry settlement ledger, webhook reconciliation, and background worker remain production requirements.
+Payment methods come from the connector catalog and are enabled per provider, environment, country, and currency. A provider cannot be activated in production without an external credential reference. Provider secrets and raw payout instruments must live in a vault, never in these tables.
+
+Transfers are deterministic sandbox ledger operations. They require a verified member, an active quote, sufficient sandbox balance, and an idempotency key. A licensed payout integration, asynchronous settlement worker, signed webhook processing, and reconciliation remain production requirements.

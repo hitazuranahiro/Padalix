@@ -11,6 +11,7 @@ The current workspace contains the paste-ready [project description](./PROJECT_D
 - [International KYC and account tiers](./docs/KYC_AUTOMATION_AND_ACCOUNT_TIERS.md)
 - [Notifications and compliance boundary](./docs/NOTIFICATIONS_AND_COMPLIANCE.md)
 - [Deployment runbook](./docs/DEPLOYMENT.md)
+- [Production MVP and wallet connector plan](./docs/PRODUCTION_MVP.md)
 
 ## Administrator CMS
 

@@ -14,6 +14,23 @@ export type PlatformAccount = {
   kycStatus?: string;
 };
 
+export type PaymentMethod = {
+  id: string;
+  code: string;
+  displayName: string;
+  payoutType: "stellar_wallet" | "wallet" | "bank" | "cash_pickup";
+  countryCode: string;
+  destinationCurrency: string;
+  destinationNetwork?: string;
+  destinationAsset?: string;
+  minimumAmount?: string;
+  maximumAmount?: string;
+  minimumVerificationLevel: "basic" | "verified" | "enhanced" | "business";
+  capabilities: string[];
+  environment: "sandbox" | "testnet" | "production";
+  provider: string;
+};
+
 export async function platformRequest<T>(session: SessionIdentity, path: string, init: RequestInit = {}) {
   const origin = process.env.PLATFORM_API_ORIGIN_URL;
   const token = process.env.PLATFORM_INTERNAL_TOKEN;

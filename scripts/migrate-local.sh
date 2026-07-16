@@ -13,6 +13,7 @@ for migration in \
   005_kyc_compliance.sql \
   006_kyc_automation_and_capabilities.sql \
   007_customer_auth.sql \
-  008_platform_mvp.sql; do
+  008_platform_mvp.sql \
+  009_payment_connectors.sql; do
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT_DIR/apps/admin/sql/$migration"
 done

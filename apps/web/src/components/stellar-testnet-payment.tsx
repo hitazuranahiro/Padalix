@@ -143,7 +143,7 @@ export function StellarTestnetPayment({ wallets, config, allowed }: { wallets: S
   return (
     <main className={styles.page}>
       <header className={styles.hero}>
-        <div><p>STELLAR TESTNET / REAL NETWORK</p><h1>Sign locally. Settle on-chain.</h1><span>This flow submits a genuine Stellar testnet payment. Testnet assets have no monetary value.</span></div>
+        <div><p>STELLAR TESTNET</p><h1>Send on testnet</h1><span>Prepare a genuine Stellar testnet payment, review it in your wallet, and track its confirmation.</span></div>
         <aside data-enabled={config.enabled}><RadioTower size={20} /><span><small>EXECUTION MODE</small><strong>{config.enabled ? "TESTNET ACTIVE" : "DISABLED"}</strong></span></aside>
       </header>
 

@@ -95,29 +95,36 @@ export function StatusConsole({ initialStatus }: { initialStatus: PublicStatus }
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     setCreating(true);
     setError("");
-    const form = new FormData(event.currentTarget);
-    const response = await fetch("/api/admin/status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        kind: form.get("kind"),
-        impact: form.get("impact"),
-        state: form.get("state"),
-        title: form.get("title"),
-        summary: form.get("summary"),
-        published: form.get("published") === "on",
-        componentKeys: form.getAll("components"),
-      }),
-    });
-    const body = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) setError(body.error ?? "Incident creation failed.");
-    else {
-      event.currentTarget.reset();
+    const form = new FormData(formElement);
+    try {
+      const response = await fetch("/api/admin/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: form.get("kind"),
+          impact: form.get("impact"),
+          state: form.get("state"),
+          title: form.get("title"),
+          summary: form.get("summary"),
+          published: form.get("published") === "on",
+          componentKeys: form.getAll("components"),
+        }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) {
+        setError(body.error ?? "Incident creation failed.");
+        return;
+      }
+      formElement.reset();
       await refresh();
+    } catch {
+      setError("Incident creation could not be confirmed. Refresh before trying again.");
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   }
 
   return <div className="status-admin">

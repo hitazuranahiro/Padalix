@@ -5,7 +5,7 @@ import { AdminBrand } from "@/components/admin-brand";
 import { CmsEditor } from "@/components/cms-editor";
 import { SignOutButton } from "@/components/sign-out-button";
 import Link from "next/link";
-import { LifeBuoy, ShieldCheck, Users } from "lucide-react";
+import { Activity, LifeBuoy, ShieldCheck, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export default async function AdminPage() {
   const content = await getContent();
 
   return <main className="admin-shell">
-    <header className="admin-header"><AdminBrand /><div className="admin-tabs"><span className="active">CMS</span><Link href="/support"><LifeBuoy size={15} /> SUPPORT</Link><Link href="/kyc"><ShieldCheck size={15}/> KYC</Link><Link href="/team"><Users size={15}/> TEAM</Link></div><div className="admin-identity"><span><strong>{session.user.name}</strong><small>{session.user.email}</small></span><SignOutButton /></div></header>
+    <header className="admin-header"><AdminBrand /><div className="admin-tabs"><span className="active">CMS</span><Link href="/support"><LifeBuoy size={15} /> SUPPORT</Link><Link href="/kyc"><ShieldCheck size={15}/> KYC</Link><Link href="/status"><Activity size={15}/> STATUS</Link><Link href="/team"><Users size={15}/> TEAM</Link></div><div className="admin-identity"><span><strong>{session.user.name}</strong><small>{session.user.email}</small></span><SignOutButton /></div></header>
     <CmsEditor initialContent={content.draft} publishedAt={content.publishedAt} />
   </main>;
 }

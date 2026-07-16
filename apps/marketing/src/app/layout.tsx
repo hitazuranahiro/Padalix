@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { DM_Mono, Manrope } from "next/font/google";
+import { StatusBanner } from "@/components/status-banner";
+import { loadPublicStatus } from "@/lib/status";
 import "./globals.css";
+import "./status.css";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -58,10 +62,15 @@ export const viewport: Viewport = {
   colorScheme: "dark"
 };
 
+async function StreamedStatusBanner() {
+  const status = await loadPublicStatus();
+  return <StatusBanner status={status} />;
+}
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${manrope.variable} ${dmMono.variable}`}>
-      <body>{children}</body>
+      <body><Suspense fallback={null}><StreamedStatusBanner /></Suspense>{children}</body>
     </html>
   );
 }

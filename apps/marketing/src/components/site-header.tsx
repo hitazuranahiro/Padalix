@@ -34,6 +34,7 @@ export function SiteHeader({ appUrl }: SiteHeaderProps) {
               {link.label}
             </Link>
           ))}
+          <Link href="/status">Status</Link>
         </nav>
         <a className="cut-button cut-button-light header-action" href={appUrl}>
           <span>{siteContent.navigation.action}</span>
@@ -55,6 +56,7 @@ export function SiteHeader({ appUrl }: SiteHeaderProps) {
             {link.label}
           </Link>
         ))}
+        <Link href="/status" onClick={() => setOpen(false)}>Status</Link>
         <a href={appUrl} onClick={() => setOpen(false)}>
           {siteContent.navigation.action}
         </a>

@@ -14,6 +14,9 @@ for migration in \
   006_kyc_automation_and_capabilities.sql \
   007_customer_auth.sql \
   008_platform_mvp.sql \
-  009_payment_connectors.sql; do
+  009_payment_connectors.sql \
+  010_status_system.sql \
+  011_customer_passkeys.sql \
+  012_stellar_wallet_links.sql; do
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT_DIR/apps/admin/sql/$migration"
 done

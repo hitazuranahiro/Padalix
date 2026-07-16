@@ -20,9 +20,12 @@ Create a Vercel project with:
 - Root Directory: `apps/marketing`
 - Framework Preset: Next.js
 - Environment variable: `NEXT_PUBLIC_APP_URL=https://app.padalix.com`
+- Server-only environment variable: `STATUS_API_URL=https://admin.padalix.com/api/status`
 - Production domain: `padalix.com`
 
 The future customer PWA should use its own Vercel project and the `app.padalix.com` domain.
+
+`/status` renders measured component health and published incident history. The global incident banner is streamed behind a React Suspense boundary and fails open, so status-feed latency or failure does not hold up marketing page content.
 
 ## Content
 

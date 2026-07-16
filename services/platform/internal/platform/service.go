@@ -19,8 +19,9 @@ import (
 )
 
 type Service struct {
-	db            *pgxpool.Pool
-	internalToken string
+	db                *pgxpool.Pool
+	internalToken     string
+	stellarWalletAuth *StellarWalletAuth
 }
 
 type identity struct {
@@ -48,19 +49,31 @@ type contextKey string
 const identityKey contextKey = "identity"
 
 func New(db *pgxpool.Pool, internalToken string) *Service {
-	return &Service{db: db, internalToken: internalToken}
+	auth, _ := NewStellarWalletAuth(StellarWalletConfig{
+		Network: "testnet", HomeDomain: "padalix.com", WebAuthDomain: "api.padalix.com",
+	})
+	return NewWithStellarWalletAuth(db, internalToken, auth)
+}
+
+func NewWithStellarWalletAuth(db *pgxpool.Pool, internalToken string, auth *StellarWalletAuth) *Service {
+	return &Service{db: db, internalToken: internalToken, stellarWalletAuth: auth}
 }
 
 func (s *Service) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
 	mux.Handle("GET /v1/account", s.authenticate(http.HandlerFunc(s.getAccount)))
+	mux.Handle("GET /v1/dashboard", s.authenticate(http.HandlerFunc(s.getDashboard)))
 	mux.Handle("GET /v1/payment-methods", s.authenticate(http.HandlerFunc(s.listPaymentMethods)))
 	mux.Handle("GET /v1/activity", s.authenticate(http.HandlerFunc(s.getActivity)))
 	mux.Handle("GET /v1/recipients", s.authenticate(http.HandlerFunc(s.getRecipients)))
 	mux.Handle("POST /v1/recipients", s.authenticate(http.HandlerFunc(s.createRecipient)))
 	mux.Handle("POST /v1/quotes", s.authenticate(http.HandlerFunc(s.createQuote)))
 	mux.Handle("POST /v1/transfers", s.authenticate(http.HandlerFunc(s.createTransfer)))
+	mux.Handle("POST /v1/stellar-wallets/challenge", s.authenticate(http.HandlerFunc(s.createStellarWalletChallenge)))
+	mux.Handle("POST /v1/stellar-wallets/verify", s.authenticate(http.HandlerFunc(s.verifyStellarWalletChallenge)))
+	mux.Handle("GET /v1/stellar-wallets", s.authenticate(http.HandlerFunc(s.listStellarWallets)))
+	mux.Handle("DELETE /v1/stellar-wallets/{walletID}", s.authenticate(http.HandlerFunc(s.unlinkStellarWallet)))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -158,28 +171,57 @@ func (s *Service) getAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+type activityItem struct {
+	EventType    string         `json:"eventType"`
+	ResourceType string         `json:"resourceType"`
+	ResourceID   string         `json:"resourceId"`
+	Summary      string         `json:"summary"`
+	Metadata     map[string]any `json:"metadata"`
+	CreatedAt    time.Time      `json:"createdAt"`
+}
+
+func (s *Service) activityFor(ctx context.Context, accountID string, limit int) ([]activityItem, error) {
+	rows, err := s.db.Query(ctx, `select event_type,resource_type,resource_id,summary,metadata,created_at from platform.activity_event where account_id=$1 order by created_at desc limit $2`, accountID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]activityItem, 0)
+	for rows.Next() {
+		var item activityItem
+		if err := rows.Scan(&item.EventType, &item.ResourceType, &item.ResourceID, &item.Summary, &item.Metadata, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *Service) getDashboard(w http.ResponseWriter, r *http.Request) {
+	acct, err := s.accountFor(r.Context(), currentIdentity(r).Subject)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "dashboard unavailable")
+		return
+	}
+	activity, err := s.activityFor(r.Context(), acct.ID, 4)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "dashboard unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"account": acct, "activity": activity})
+}
+
 func (s *Service) getActivity(w http.ResponseWriter, r *http.Request) {
 	acct, err := s.accountFor(r.Context(), currentIdentity(r).Subject)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "activity unavailable")
 		return
 	}
-	rows, err := s.db.Query(r.Context(), `select event_type,resource_type,resource_id,summary,metadata,created_at from platform.activity_event where account_id=$1 order by created_at desc limit 100`, acct.ID)
+	items, err := s.activityFor(r.Context(), acct.ID, 100)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "activity unavailable")
 		return
-	}
-	defer rows.Close()
-	items := make([]map[string]any, 0)
-	for rows.Next() {
-		var eventType, resourceType, resourceID, summary string
-		var metadata map[string]any
-		var createdAt time.Time
-		if err := rows.Scan(&eventType, &resourceType, &resourceID, &summary, &metadata, &createdAt); err != nil {
-			writeError(w, http.StatusInternalServerError, "activity unavailable")
-			return
-		}
-		items = append(items, map[string]any{"eventType": eventType, "resourceType": resourceType, "resourceId": resourceID, "summary": summary, "metadata": metadata, "createdAt": createdAt})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"activity": items})
 }

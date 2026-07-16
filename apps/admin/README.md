@@ -45,3 +45,9 @@ The KYC desk is available at `/kyc`. Administrators can provision a `compliance_
 KYC member and staff notifications are written to `notification.outbox`. Configure `KYC_REVIEW_EMAIL` for the compliance queue. Email delivery still requires the Go worker and selected email provider described in the architecture plan.
 
 Machine assessments are stored with provider, model, policy versions, normalized scores, reason codes, and recommendation. `KYC_AUTO_APPROVAL_ENABLED` defaults to `false`. Enable it only after country/document policies, screening, model validation, monitoring, and an operational kill switch have passed the production readiness gate. Automation can approve a low-risk case but never reject a member; adverse or uncertain results require human review.
+
+## Service status
+
+The administrator status console is available at `/status`. Migration `010_status_system.sql` creates the component, observed-check, incident, incident-update, and incident-component records. Configure a unique `CRON_SECRET`; the Vercel cron invokes `/api/cron/status` every five minutes and the same checks can be started manually by an administrator.
+
+Automatic notices open only after three consecutive failures and resolve after two consecutive successes. All automatic and manual incident changes are recorded in `audit.admin_event`. The public `/api/status` response includes only published incidents and public components. Observed percentages are derived from stored checks and are not an SLA.

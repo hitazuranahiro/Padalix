@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight, Check, Circle, LockKeyhole, UserPlus } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { markRecentPasswordAuthentication } from "@/lib/pwa";
 
 const passwordRules = [
   { label: "12+ characters", test: (value: string) => value.length >= 12 },
@@ -30,13 +31,14 @@ export function CustomerAuthForm({ mode }: { mode: "login" | "signup" }) {
       const result = await authClient.signUp.email({ name: String(form.get("name")), email: String(form.get("email")), password });
       if (result.error) { setError(result.error.message ?? "Account creation failed."); setLoading(false); return; }
     } else {
-      const result = await authClient.signIn.email({ email: String(form.get("email")), password });
+      const result = await authClient.signIn.email({ email: String(form.get("email")), password, rememberMe: true });
       if (result.error) { setError("Email or password is incorrect."); setLoading(false); return; }
     }
+    markRecentPasswordAuthentication();
     window.location.href = "/";
   }}>
     {mode === "signup" && <label><span>FULL NAME</span><input name="name" required minLength={2} maxLength={100} autoComplete="name" placeholder="Your legal name" /></label>}
-    <label><span>EMAIL ADDRESS</span><input name="email" type="email" required autoComplete="email" placeholder="you@example.com" /></label>
+    <label><span>EMAIL ADDRESS</span><input name="email" type="email" required autoComplete={mode === "login" ? "username" : "email"} inputMode="email" autoCapitalize="none" spellCheck={false} placeholder="you@example.com" /></label>
     <label><span>PASSWORD</span><input name="password" type="password" required minLength={12} maxLength={128} autoComplete={mode === "signup" ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
     {mode === "signup" && <><label><span>CONFIRM PASSWORD</span><input type="password" required minLength={12} maxLength={128} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></label><div className="customer-password-rules">{passwordRules.map((rule) => { const passed = rule.test(password); return <span className={passed ? "passed" : ""} key={rule.label}>{passed ? <Check size={12} /> : <Circle size={8} />}{rule.label}</span>; })}<span className={matches ? "passed" : ""}>{matches ? <Check size={12} /> : <Circle size={8} />}Passwords match</span></div></>}
     {error && <p className="auth-error" role="alert">{error}</p>}

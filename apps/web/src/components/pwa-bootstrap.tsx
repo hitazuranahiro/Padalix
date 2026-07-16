@@ -2,6 +2,7 @@
 
 import { Download, Share2, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { isInstalledPwa } from "@/lib/pwa";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -10,10 +11,6 @@ interface BeforeInstallPromptEvent extends Event {
 
 const DISMISS_KEY = "padalix-pwa-install-dismissed";
 const DISMISS_FOR_MS = 7 * 24 * 60 * 60 * 1000;
-
-function isStandalone() {
-  return window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-}
 
 function isAppleMobile() {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -25,8 +22,21 @@ export function PwaBootstrap() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
-    if (isStandalone()) return;
+    if ("serviceWorker" in navigator) {
+      if (process.env.NODE_ENV === "production") {
+        navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
+      } else {
+        navigator.serviceWorker.getRegistrations().then((registrations) =>
+          Promise.all(registrations.map((registration) => registration.unregister())),
+        ).catch(() => undefined);
+        if ("caches" in window) {
+          caches.keys().then((keys) => Promise.all(
+            keys.filter((key) => key.startsWith("padalix-shell-")).map((key) => caches.delete(key)),
+          )).catch(() => undefined);
+        }
+      }
+    }
+    if (isInstalledPwa()) return;
 
     const dismissedAt = Number(window.localStorage.getItem(DISMISS_KEY) || 0);
     if (Date.now() - dismissedAt < DISMISS_FOR_MS) return;

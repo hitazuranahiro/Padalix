@@ -1,6 +1,10 @@
 import { betterAuth } from "better-auth";
+import { passkey } from "@better-auth/passkey";
 import { nextCookies } from "better-auth/next-js";
 import { Pool } from "pg";
+
+const authBaseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:3002";
+const authURL = new URL(authBaseURL);
 
 const trustedOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "http://localhost:3002")
   .split(",")
@@ -15,7 +19,7 @@ const authDatabase = new Pool({
 
 export const auth = betterAuth({
   appName: "Padalix",
-  baseURL: process.env.BETTER_AUTH_URL,
+  baseURL: authBaseURL,
   secret: process.env.BETTER_AUTH_SECRET,
   database: authDatabase,
   trustedOrigins,
@@ -32,7 +36,20 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 7,
     updateAge: 60 * 60 * 24,
+    freshAge: 60 * 5,
     cookieCache: { enabled: true, maxAge: 60 * 5 },
   },
-  plugins: [nextCookies()],
+  plugins: [
+    passkey({
+      rpID: authURL.hostname,
+      rpName: "Padalix",
+      origin: authURL.origin,
+      authenticatorSelection: {
+        authenticatorAttachment: "platform",
+        residentKey: "required",
+        userVerification: "required",
+      },
+    }),
+    nextCookies(),
+  ],
 });

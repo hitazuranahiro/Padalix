@@ -32,8 +32,18 @@ func main() {
 		slog.Error("database unavailable", "error", err)
 		os.Exit(1)
 	}
+	stellarConfig, err := platform.StellarWalletConfigFromEnv()
+	if err != nil {
+		slog.Error("stellar wallet configuration invalid", "error", err)
+		os.Exit(1)
+	}
+	stellarWalletAuth, err := platform.NewStellarWalletAuth(stellarConfig)
+	if err != nil {
+		slog.Error("stellar wallet configuration invalid", "error", err)
+		os.Exit(1)
+	}
 
-	service := platform.New(pool, internalToken)
+	service := platform.NewWithStellarWalletAuth(pool, internalToken, stellarWalletAuth)
 	server := &http.Server{
 		Addr:              listenAddress(),
 		Handler:           service.Handler(),

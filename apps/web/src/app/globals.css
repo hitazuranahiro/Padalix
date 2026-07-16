@@ -86,3 +86,21 @@
 @media(max-width:900px){.kyc-workspace{grid-template-columns:280px minmax(0,1fr)}.kyc-context{padding:40px 28px 30px}.kyc-context h1{font-size:2.55rem}.kyc-stage{padding:42px 35px}}
 @media(max-width:720px){.kyc-topbar{height:58px;grid-template-columns:1fr auto}.kyc-brand{padding:0 15px}.kyc-brand>span,.kyc-secure{display:none}.kyc-exit{width:58px;height:58px}.kyc-workspace{display:block;padding-top:58px}.kyc-context{position:static;display:block;min-height:0;padding:22px 18px 18px}.kyc-context:after,.kyc-context>div>span,.kyc-context>footer{display:none}.kyc-context>div>p{margin-bottom:8px}.kyc-context h1{margin:0;font-size:1.55rem;line-height:1}.kyc-context ol{display:grid;margin:22px 0 0;padding:0;grid-template-columns:repeat(5,1fr);gap:5px}.kyc-context li{display:block;min-height:0}.kyc-context li:not(:last-child):after{top:13px;right:-5px;bottom:auto;left:27px;height:1px;width:auto}.kyc-context li>i{width:27px;height:27px}.kyc-context li>span{display:none}.kyc-stage{min-height:calc(100svh - 184px);padding:30px 18px 44px;place-items:start}.kyc-panel{margin:auto 0}.kyc-panel>h2{font-size:2rem}.kyc-panel>h2+span{font-size:.7rem}.kyc-panel>.panel-icon{margin-bottom:22px}.kyc-field{margin-top:35px}.identity-fields{grid-template-columns:1fr;gap:2px}.identity-fields .kyc-field{margin-top:18px}.kyc-panel>.kyc-primary{width:100%;margin-top:34px}.kyc-actions{align-items:stretch;flex-direction:column-reverse}.kyc-actions .kyc-primary,.kyc-actions .kyc-back{width:100%;min-width:0}.document-options{margin-top:30px}.capture-choice,.liveness-intro{min-height:270px;padding:28px 18px}.camera-view{height:48svh;min-height:330px;margin-right:-18px;margin-left:-18px;width:calc(100% + 36px)}.capture-frame{inset:20% 6% 25%}.camera-status small{display:none}.capture-preview{height:42svh;min-height:300px;margin-right:-18px;margin-left:-18px;width:calc(100% + 36px)}.review-list>div{min-height:48px}.preview-notice{text-align:center}.kyc-success>.kyc-primary{width:100%}}
 @media(prefers-reduced-motion:reduce){.kyc-panel,.capture-frame>b,.camera-status>span>i,.face-guide>i,.face-guide>b,.face-animation>i,.kyc-success>.success-mark,.spin{animation:none!important}}
+
+/* Full-screen PWA geometry and touch performance */
+:root{--safe-top:env(safe-area-inset-top,0px);--safe-right:env(safe-area-inset-right,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px)}
+html{-webkit-text-size-adjust:100%}body{min-height:100dvh;overflow-x:hidden;overscroll-behavior-y:contain;-webkit-font-smoothing:antialiased}button,a{touch-action:manipulation}.app-frame,.app-stage{min-height:100dvh}
+@media(max-width:720px){
+  .app-stage{padding-bottom:calc(66px + var(--safe-bottom))}
+  .app-topbar{height:calc(var(--topbar) + var(--safe-top));padding-top:var(--safe-top);padding-right:calc(15px + var(--safe-right));padding-left:calc(15px + var(--safe-left))}
+  .mobile-app-nav{height:calc(66px + var(--safe-bottom));padding-right:var(--safe-right);padding-bottom:var(--safe-bottom);padding-left:var(--safe-left)}
+  .dashboard{padding-right:calc(16px + var(--safe-right));padding-left:calc(16px + var(--safe-left))}
+  .flow-page,.verification-page{min-height:calc(100dvh - var(--topbar) - var(--safe-top))}
+  .flow-page>header,.verification-page>header,.quote-form,.verification-flow,.level-map,.activity-ledger,.recipient-manager{padding-right:calc(18px + var(--safe-right));padding-left:calc(18px + var(--safe-left))}
+  input,select,textarea{font-size:16px!important}
+  .dashboard-grid{content-visibility:auto;contain-intrinsic-size:auto 680px}
+  .kyc-topbar{height:calc(58px + var(--safe-top));padding-top:var(--safe-top);padding-right:var(--safe-right);padding-left:var(--safe-left)}
+  .kyc-workspace{min-height:100dvh;padding-top:calc(58px + var(--safe-top))}
+  .kyc-stage{min-height:calc(100dvh - 184px - var(--safe-top));padding-right:calc(18px + var(--safe-right));padding-bottom:calc(44px + var(--safe-bottom));padding-left:calc(18px + var(--safe-left))}
+  .offline-page{padding-top:calc(24px + var(--safe-top));padding-right:calc(18px + var(--safe-right));padding-bottom:calc(24px + var(--safe-bottom));padding-left:calc(18px + var(--safe-left))}
+}

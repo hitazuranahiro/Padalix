@@ -1,4 +1,4 @@
-const CACHE_NAME = "padalix-shell-v1";
+const CACHE_NAME = "padalix-shell-v2";
 const OFFLINE_ASSETS = [
   "/offline",
   "/favicon.png",
@@ -29,7 +29,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/") || url.pathname === "/favicon.png" || url.pathname === "/apple-touch-icon.png") {
+  if (url.pathname.startsWith("/icons/") || url.pathname === "/favicon.png" || url.pathname === "/apple-touch-icon.png") {
     event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then(async (response) => {
       if (response.ok) {
         const cache = await caches.open(CACHE_NAME);

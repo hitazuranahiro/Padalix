@@ -17,3 +17,25 @@ Captured KYC image bytes remain in the browser until private object-storage sign
 Production integrations must use the same-origin `/api/auth/*` and `/api/v1/*` boundaries described in `docs/DEPLOYMENT.md`.
 
 Capability visibility is centralized in `src/lib/capabilities.ts` and mirrors `policy.account_capability`. The Go API remains authoritative for every protected command; frontend checks are usability controls only.
+
+The installed PWA offers platform passkey enrollment and passwordless re-entry through WebAuthn. The prompt is deliberately limited to standalone display mode; browser sign-in continues to use email and password. Enrollment requires password authentication within the previous five minutes, enforced by Better Auth's server-side session freshness check as well as a client-side prompt gate. Passkeys require HTTPS, a matching `BETTER_AUTH_URL` relying-party origin, and `apps/admin/sql/011_customer_passkeys.sql` applied before deployment. Device biometrics never reach Padalix; iOS, Android, and desktop authenticators retain the private credential and return only a signed assertion.
+
+## Stellar Wallet Linking
+
+The `/wallet` page uses Stellar Wallets Kit to request a public address and sign
+the platform API's one-time SEP-10 challenge in the customer's external wallet.
+The kit is lazy-loaded only after the customer starts the flow, so its wallet
+adapters are not part of the login or dashboard's initial client path. Padalix
+does not receive a seed phrase and does not submit the challenge transaction.
+
+Set the customer deployment network explicitly:
+
+```dotenv
+NEXT_PUBLIC_STELLAR_NETWORK=testnet
+```
+
+Any value other than the exact string `mainnet` falls back to `testnet`. A
+mainnet web build still cannot issue a challenge unless the platform deployment
+also has `STELLAR_NETWORK=mainnet` and `STELLAR_MAINNET_ENABLED=true`. These
+flags enable wallet ownership verification only; they do not activate funding,
+settlement, bank payouts, GCash, or Maya.

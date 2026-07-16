@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowUpRight, CheckCircle2, Download, FileJson, Landmark, ReceiptText } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { platformRequest, type PlatformAccount, type TransferReceipt } from "@/lib/platform";
+import { PlatformError, platformRequest, type PlatformAccount, type TransferReceipt } from "@/lib/platform";
 import { requireCustomerSession } from "@/lib/session";
 import styles from "./receipt.module.css";
 
@@ -26,9 +27,18 @@ export default async function ReceiptPage({ params }: PageProps) {
   const session = await requireCustomerSession();
   const { reference } = await params;
   const normalizedReference = reference.trim().toUpperCase();
+  if (!/^PDX-\d{4}-\d{6}$/.test(normalizedReference)) notFound();
+
+  const receiptRequest = platformRequest<{ receipt: TransferReceipt }>(
+    session,
+    `/v1/transfers/${encodeURIComponent(normalizedReference)}`,
+  ).catch((error: unknown) => {
+    if (error instanceof PlatformError && error.status === 404) notFound();
+    throw error;
+  });
   const [account, data] = await Promise.all([
     platformRequest<PlatformAccount>(session, "/v1/account"),
-    platformRequest<{ receipt: TransferReceipt }>(session, `/v1/transfers/${encodeURIComponent(normalizedReference)}`),
+    receiptRequest,
   ]);
   const receipt = data.receipt;
   const hasChainEvidence = Boolean(receipt.stellarTransactionHash);

@@ -9,6 +9,13 @@ pnpm dev:platform
 
 Local health endpoint: `http://127.0.0.1:8080/health`
 
+Run the durable worker in a second process after applying all migrations:
+
+```bash
+cd services/platform
+go run ./cmd/worker
+```
+
 For a standalone Vercel container project, select `services/platform` as the
 root directory. `Dockerfile.vercel` builds the service and the runtime-provided
 `PORT` is used automatically. Configure `DATABASE_URL` and
@@ -113,3 +120,37 @@ member, a verified testnet wallet, a funded destination, and an idempotency key.
 A licensed payout integration, asynchronous settlement worker, signed webhook
 processing, treasury controls, and reconciliation remain production mainnet
 requirements.
+
+## Worker and Reconciliation
+
+Migration `015_platform_worker_and_ledger.sql` adds leased outbox processing,
+bounded exponential retries, stale-lock recovery, dead-letter reconciliation
+exceptions, notification provider IDs, and Stellar testnet ledger state. The
+API submits the customer-signed envelope directly from request memory and then
+atomically records the submitted state and reconciliation job. The signed XDR
+is never stored. The worker can recreate missing reconciliation jobs from the
+submitted intent, so API or worker restarts do not depend on browser polling.
+
+On chain success, one database transaction records receipt evidence, balanced
+double-entry postings for the payment and network fee, member activity, and an
+idempotent notification. Failed transactions are also reconciled and notified.
+Jobs that exhaust retries enter `dead_letter` and create an operator-visible
+`platform.reconciliation_exception` row.
+
+Email delivery is fail-closed and remains paused by default. When enabled, the
+provider endpoint must accept the JSON template contract, honor the
+`Idempotency-Key` header, and return `{"id":"provider-message-id"}`:
+
+```dotenv
+WORKER_ID=padalix-worker-1
+WORKER_POLL_INTERVAL=2s
+WORKER_LOCK_TIMEOUT=2m
+EMAIL_DELIVERY_ENABLED=false
+EMAIL_PROVIDER_URL=https://email-provider.example/v1/send
+EMAIL_PROVIDER_TOKEN=<server-only-provider-token>
+EMAIL_FROM=notifications@padalix.com
+```
+
+The same delivery loop processes `notification.outbox` (including security
+messages with a null `member_id`) and `support.notification_outbox`. Optional
+product mail is suppressed unless the member preference explicitly opts in.

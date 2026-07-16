@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { SiteContent } from "@padalix/content";
 import { getAdminSession } from "@/lib/admin-session";
 import { getContent, saveContent } from "@/lib/content-store";
+import { guardAdminMutation } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,8 @@ export async function GET() {
 export async function PUT(request: Request) {
   const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guarded = guardAdminMutation(request, { scope: "content.save", subject: session.user.id, limit: 30, windowMs: 60_000 });
+  if (guarded) return guarded;
 
   const body = await request.json() as { content?: SiteContent; publish?: boolean };
   if (!body.content?.hero?.title || !Array.isArray(body.content.product?.features)) {

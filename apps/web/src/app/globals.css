@@ -89,6 +89,7 @@
 
 /* Full-screen PWA geometry and touch performance */
 :root{--safe-top:env(safe-area-inset-top,0px);--safe-right:env(safe-area-inset-right,0px);--safe-bottom:env(safe-area-inset-bottom,0px);--safe-left:env(safe-area-inset-left,0px)}
+.auth-success{padding:12px;border-left:3px solid #168846;color:#145c33;background:#dcebe1;font-size:.65rem;line-height:1.5}.auth-complete-link{display:flex;min-height:52px;padding:0 15px;align-items:center;justify-content:space-between;border:1px solid var(--black);color:var(--black);background:var(--signal);font:700 .5rem var(--font-mono),monospace}
 html{-webkit-text-size-adjust:100%}body{min-height:100dvh;overflow-x:hidden;overscroll-behavior-y:contain;-webkit-font-smoothing:antialiased}button,a{touch-action:manipulation}.app-frame,.app-stage{min-height:100dvh}
 @media(max-width:720px){
   .app-stage{padding-bottom:calc(66px + var(--safe-bottom))}

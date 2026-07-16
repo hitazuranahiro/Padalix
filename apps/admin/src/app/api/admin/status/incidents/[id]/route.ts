@@ -1,4 +1,5 @@
 import { getAdminSession } from "@/lib/admin-session";
+import { guardAdminMutation } from "@/lib/request-security";
 import { incidentImpacts, incidentStates, updateIncident, type IncidentImpact, type IncidentState } from "@/lib/status-store";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,13 @@ function validImpact(value: unknown): value is IncidentImpact {
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await getAdminSession();
   if (!session) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const guarded = guardAdminMutation(request, {
+    scope: "status.incident.update",
+    subject: session.user.id,
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (guarded) return guarded;
   const { id } = await context.params;
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body || !validState(body.state) || !validImpact(body.impact)) {

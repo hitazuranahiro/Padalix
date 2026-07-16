@@ -42,6 +42,14 @@ A production connector stays `disabled` until all items pass:
 - Keep managed signing testnet-only and outside the browser.
 - Exit when retries cannot duplicate a transfer and every Stellar reference reconciles to balanced ledger postings.
 
+Implemented foundation: migration 015 and `services/platform/cmd/worker` now
+lease PostgreSQL outbox jobs with `FOR UPDATE SKIP LOCKED`, recover stale locks,
+apply bounded retries, reconcile submitted Stellar testnet transactions, create
+double-entry postings and receipt evidence atomically, and dead-letter terminal
+exceptions. Customer-signed XDR remains request-memory-only, so initial network
+submission stays synchronous; durable processing begins immediately after RPC
+acceptance and does not depend on customer polling.
+
 ### Phase B: One licensed PHP payout
 
 - Select one partner and one method, preferably a provider capable of e-wallet and bank payouts through one contract.

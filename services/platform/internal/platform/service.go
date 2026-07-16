@@ -88,11 +88,7 @@ func (s *Service) Handler() http.Handler {
 	mux.Handle("POST /v1/stellar-payments/prepare", s.authenticate(http.HandlerFunc(s.prepareStellarPayment)))
 	mux.Handle("POST /v1/stellar-payments/{paymentID}/submit", s.authenticate(http.HandlerFunc(s.submitStellarPayment)))
 	mux.Handle("GET /v1/stellar-payments/{paymentID}", s.authenticate(http.HandlerFunc(s.getStellarPayment)))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		mux.ServeHTTP(w, r)
-	})
+	return withHTTPBoundary(mux)
 }
 
 func (s *Service) health(w http.ResponseWriter, r *http.Request) {

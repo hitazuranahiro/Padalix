@@ -4,6 +4,8 @@
 
 This document defines the implementation contract for identity qualification, machine-assisted KYC triage, manual review, and account capability enforcement. It extends the existing `identity`, `compliance`, and `notification` boundaries without making a particular verification vendor part of Padalix's domain model.
 
+Current implementation status: automatic approval is disabled in application code. Machine assessments may record an `auto_approve` recommendation for later policy evaluation, but all submitted cases remain in the manual review queue and only an authorized reviewer can approve a member.
+
 No model or identity vendor is the final authority for an adverse decision. Automation may approve a low-risk application only when every mandatory control passes. Uncertain, conflicting, high-risk, or potentially adverse results go to a trained reviewer. A reviewer, not a model, rejects a member or applies an enduring restriction.
 
 "International support" means Padalix maintains an explicit country and document policy for each launched corridor. It does not mean every government document is accepted everywhere. Legal and compliance owners must approve each country policy before production enablement.
@@ -22,13 +24,13 @@ The Go API evaluates capabilities on every sensitive command. The PWA may hide u
 
 ### 2.1 Account tiers
 
-| Tier | Entry requirements | Permitted capabilities | Prohibited or gated capabilities |
-| --- | --- | --- | --- |
-| `basic` | Registered account, verified email, accepted terms | Manage profile and security, browse supported corridors, create recipient drafts, request indicative quotes, start KYC, contact support | Hold funds, fund an account, send, receive settlement, withdraw, claim, schedule, bulk send, create API credentials |
-| `verified_individual` | Approved standard KYC, no active sanctions or fraud restriction | Single-recipient transfers within corridor limits, receive permitted transfers, saved recipients, claims, normal withdrawal, transaction history | Bulk payouts, payment-gateway credentials, business settlement, activity above enhanced limits |
-| `enhanced_individual` | Approved enhanced due diligence, source-of-funds evidence when required | Higher policy limits, scheduled transfers, family distribution, bounded multi-recipient send where legally permitted | Merchant acquiring, business payout API, activity above enhanced limits |
-| `verified_business` | Approved KYB, verified beneficial owners and controllers, approved use case | Business settlement, batch payouts, scoped API credentials, signed webhooks, payment-gateway features explicitly enabled for the merchant | Unapproved corridors, products, settlement currencies, or volume bands |
-| `restricted` | Compliance, fraud, security, legal, or operational hold | Login, security controls, support, KYC remediation, view records as policy permits | All money movement and credential issuance unless an explicit restriction exception exists |
+| Tier                  | Entry requirements                                                          | Permitted capabilities                                                                                                                           | Prohibited or gated capabilities                                                                                    |
+| --------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `basic`               | Registered account, verified email, accepted terms                          | Manage profile and security, browse supported corridors, create recipient drafts, request indicative quotes, start KYC, contact support          | Hold funds, fund an account, send, receive settlement, withdraw, claim, schedule, bulk send, create API credentials |
+| `verified_individual` | Approved standard KYC, no active sanctions or fraud restriction             | Single-recipient transfers within corridor limits, receive permitted transfers, saved recipients, claims, normal withdrawal, transaction history | Bulk payouts, payment-gateway credentials, business settlement, activity above enhanced limits                      |
+| `enhanced_individual` | Approved enhanced due diligence, source-of-funds evidence when required     | Higher policy limits, scheduled transfers, family distribution, bounded multi-recipient send where legally permitted                             | Merchant acquiring, business payout API, activity above enhanced limits                                             |
+| `verified_business`   | Approved KYB, verified beneficial owners and controllers, approved use case | Business settlement, batch payouts, scoped API credentials, signed webhooks, payment-gateway features explicitly enabled for the merchant        | Unapproved corridors, products, settlement currencies, or volume bands                                              |
+| `restricted`          | Compliance, fraud, security, legal, or operational hold                     | Login, security controls, support, KYC remediation, view records as policy permits                                                               | All money movement and credential issuance unless an explicit restriction exception exists                          |
 
 Limits are configuration, not hard-coded tier behavior. At minimum, policy keys include per-transaction, daily, rolling 30-day, recipient-count, velocity, corridor, asset, funding-source, and payout-method limits.
 
@@ -143,16 +145,16 @@ Raw vendor payloads are encrypted, access-controlled, retention-limited, and ref
 
 ### 4.2 Required signal families
 
-| Signal family | Examples | Mandatory result behavior |
-| --- | --- | --- |
-| Capture quality | Blur, glare, crop, resolution, unsupported file, suspected injection | Retry capture for remediable quality failures; manual review for persistent or contradictory results |
-| Document integrity | Template match, security features, MRZ/barcode consistency, tampering, expiry | Failed authenticity or tampering can never auto-approve |
-| Data extraction | Name, birth date, document number, issuing country, expiry | Low-confidence or conflicting required fields require recapture or review |
-| Person match | Selfie-to-document similarity, age consistency | Below the calibrated review boundary requires human review; do not expose a biometric score to the member |
-| Liveness | Presentation attack, replay, deepfake/injection indicators | Failed or inconclusive required liveness blocks automation |
-| Identity consistency | Registration/profile match, duplicate identity, reused document, device/account linkage | Material mismatch or suspected duplicate requires review |
-| Screening | Sanctions, PEP, adverse media, law-enforcement or local lists where lawful | Potential sanctions match immediately restricts money movement and requires specialist review; never auto-reject from fuzzy matching alone |
-| Fraud/behavior | Device integrity, impossible velocity, network reputation, synthetic identity indicators | Elevated risk routes to review or security restriction according to policy |
+| Signal family        | Examples                                                                                 | Mandatory result behavior                                                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Capture quality      | Blur, glare, crop, resolution, unsupported file, suspected injection                     | Retry capture for remediable quality failures; manual review for persistent or contradictory results                                       |
+| Document integrity   | Template match, security features, MRZ/barcode consistency, tampering, expiry            | Failed authenticity or tampering can never auto-approve                                                                                    |
+| Data extraction      | Name, birth date, document number, issuing country, expiry                               | Low-confidence or conflicting required fields require recapture or review                                                                  |
+| Person match         | Selfie-to-document similarity, age consistency                                           | Below the calibrated review boundary requires human review; do not expose a biometric score to the member                                  |
+| Liveness             | Presentation attack, replay, deepfake/injection indicators                               | Failed or inconclusive required liveness blocks automation                                                                                 |
+| Identity consistency | Registration/profile match, duplicate identity, reused document, device/account linkage  | Material mismatch or suspected duplicate requires review                                                                                   |
+| Screening            | Sanctions, PEP, adverse media, law-enforcement or local lists where lawful               | Potential sanctions match immediately restricts money movement and requires specialist review; never auto-reject from fuzzy matching alone |
+| Fraud/behavior       | Device integrity, impossible velocity, network reputation, synthetic identity indicators | Elevated risk routes to review or security restriction according to policy                                                                 |
 
 ## 5. Machine-assisted decisioning
 
@@ -171,12 +173,12 @@ Provider-specific confidence values are calibrated on Padalix validation data be
 
 Thresholds are versioned per country, document, vendor/model version, and capture channel. Initial values below are launch guardrails, not universal biometric truth:
 
-| Automated outcome | Required conditions |
-| --- | --- |
-| Approve standard KYC | Country/document policy enabled; all required evidence present; document, identity, and required biometric confidence each `>= 0.92`; fraud risk `<= 0.15`; overall risk points `<= 20`; screening `clear`; no hard stop or conflicting data; model/provider version approved for automation |
-| Manual review | Any confidence in the review band `0.70-0.919`; fraud risk `0.151-0.60`; risk points `21-69`; PEP or adverse-media result; potential sanctions/watchlist match; duplicate suspicion; material data conflict; required signal unavailable; random quality-control sample |
-| Recapture/information request | Remediable image quality failure, missing side/page, unreadable field, expired supporting evidence, or member-correctable mismatch |
-| Immediate restriction and specialist review | Confirmed or high-confidence sanctions escalation, fraud risk `> 0.60`, risk points `>= 70`, detected presentation/injection attack, document tampering, or policy hard stop |
+| Automated outcome                           | Required conditions                                                                                                                                                                                                                                                                          |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Approve standard KYC                        | Country/document policy enabled; all required evidence present; document, identity, and required biometric confidence each `>= 0.92`; fraud risk `<= 0.15`; overall risk points `<= 20`; screening `clear`; no hard stop or conflicting data; model/provider version approved for automation |
+| Manual review                               | Any confidence in the review band `0.70-0.919`; fraud risk `0.151-0.60`; risk points `21-69`; PEP or adverse-media result; potential sanctions/watchlist match; duplicate suspicion; material data conflict; required signal unavailable; random quality-control sample                      |
+| Recapture/information request               | Remediable image quality failure, missing side/page, unreadable field, expired supporting evidence, or member-correctable mismatch                                                                                                                                                           |
+| Immediate restriction and specialist review | Confirmed or high-confidence sanctions escalation, fraud risk `> 0.60`, risk points `>= 70`, detected presentation/injection attack, document tampering, or policy hard stop                                                                                                                 |
 
 The final row is not an automatic account rejection. It blocks new money movement, preserves relevant evidence, and creates a priority review. Confirmed sanctions handling follows the approved legal procedure.
 
@@ -258,17 +260,17 @@ Reverification triggers include document expiry, material profile change, sancti
 
 The current `compliance.kyc_case`, `kyc_document`, `kyc_review`, and `kyc_event` tables remain the case-system foundation. The Go-owned migration should add:
 
-| Record | Required fields |
-| --- | --- |
-| `compliance.country_policy` | country code, version, lifecycle, effective dates, requirements JSON, limits JSON, owner, approver |
-| `compliance.document_policy` | issuing country, document type/version, lifecycle, capture and validation requirements, provider coverage |
-| `compliance.verification_run` | case, attempt, provider/model/policy versions, state, recommendation, normalized scores, hard stops, correlation ID |
-| `compliance.verification_signal` | run, signal code, outcome, confidence/risk, reason codes, evidence references, source timestamp |
-| `compliance.screening_result` | case, screening type, provider reference, outcome, match strength, list/version timestamp, resolution state |
-| `compliance.decision` | case, recommendation/final decision, actor type/id, reason codes, summary, policy version, superseded decision |
-| `compliance.approval` | decision, reviewer, approval type, created time, uniqueness constraint per reviewer |
-| `identity.account_policy_state` | member, tier, restrictions, policy version, granted/review/expiry timestamps |
-| `identity.capability_override` | member, capability, allow/deny, reason, approver, effective and expiry times |
+| Record                           | Required fields                                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `compliance.country_policy`      | country code, version, lifecycle, effective dates, requirements JSON, limits JSON, owner, approver                  |
+| `compliance.document_policy`     | issuing country, document type/version, lifecycle, capture and validation requirements, provider coverage           |
+| `compliance.verification_run`    | case, attempt, provider/model/policy versions, state, recommendation, normalized scores, hard stops, correlation ID |
+| `compliance.verification_signal` | run, signal code, outcome, confidence/risk, reason codes, evidence references, source timestamp                     |
+| `compliance.screening_result`    | case, screening type, provider reference, outcome, match strength, list/version timestamp, resolution state         |
+| `compliance.decision`            | case, recommendation/final decision, actor type/id, reason codes, summary, policy version, superseded decision      |
+| `compliance.approval`            | decision, reviewer, approval type, created time, uniqueness constraint per reviewer                                 |
+| `identity.account_policy_state`  | member, tier, restrictions, policy version, granted/review/expiry timestamps                                        |
+| `identity.capability_override`   | member, capability, allow/deny, reason, approver, effective and expiry times                                        |
 
 Personally identifying fields that support search should use deterministic keyed hashes or tokenization; document numbers and biometric templates must not be stored in plaintext. Raw images remain in encrypted private object storage with short-lived access, malware/content validation, access logging, retention schedules, and deletion/legal-hold workflows.
 

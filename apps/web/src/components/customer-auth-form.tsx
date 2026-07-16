@@ -43,6 +43,6 @@ export function CustomerAuthForm({ mode }: { mode: "login" | "signup" }) {
     {mode === "signup" && <><label><span>CONFIRM PASSWORD</span><input type="password" required minLength={12} maxLength={128} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></label><div className="customer-password-rules">{passwordRules.map((rule) => { const passed = rule.test(password); return <span className={passed ? "passed" : ""} key={rule.label}>{passed ? <Check size={12} /> : <Circle size={8} />}{rule.label}</span>; })}<span className={matches ? "passed" : ""}>{matches ? <Check size={12} /> : <Circle size={8} />}Passwords match</span></div></>}
     {error && <p className="auth-error" role="alert">{error}</p>}
     <button disabled={loading || (mode === "signup" && (!strong || !matches))}>{mode === "signup" ? <UserPlus size={17} /> : <LockKeyhole size={17} />}<span>{loading ? "PLEASE WAIT" : mode === "signup" ? "CREATE ACCOUNT" : "SIGN IN"}</span><ArrowRight size={17} /></button>
-    <p>{mode === "signup" ? "Already registered?" : "New to Padalix?"} <Link href={mode === "signup" ? "/login" : "/signup"}>{mode === "signup" ? "Sign in" : "Create an account"}</Link></p>
+    <p>{mode === "signup" ? "Already registered?" : "New to Padalix?"} <Link href={mode === "signup" ? "/login" : "/signup"}>{mode === "signup" ? "Sign in" : "Create an account"}</Link>{mode === "login" ? <> · <Link href="/forgot-password">Forgot password?</Link></> : null}</p>
   </form>;
 }

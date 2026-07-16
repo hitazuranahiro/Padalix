@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { database } from "@/lib/db";
+import { guardAdminMutation } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 const maximumBytes = 10 * 1024 * 1024;
@@ -23,6 +24,8 @@ export async function GET() {
 export async function PUT(request: Request) {
   const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guarded = guardAdminMutation(request, { scope: "content.presentation.upload", subject: session.user.id, limit: 5, windowMs: 3_600_000 });
+  if (guarded) return guarded;
   const form = await request.formData();
   const file = form.get("file");
   if (!(file instanceof File) || file.type !== "application/pdf") return NextResponse.json({ error: "A PDF file is required" }, { status: 400 });

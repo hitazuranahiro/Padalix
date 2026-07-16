@@ -208,6 +208,12 @@ OBJECT_UPLOAD_TTL_SECONDS=300
 OBJECT_REVIEW_TTL_SECONDS=180
 EMAIL_PROVIDER=<provider>
 EMAIL_FROM=notifications@padalix.com
+EMAIL_DELIVERY_ENABLED=false
+EMAIL_PROVIDER_URL=https://<provider-api>/v1/send
+EMAIL_PROVIDER_TOKEN=<provider-secret>
+WORKER_ID=<unique-runtime-instance-id>
+WORKER_POLL_INTERVAL=2s
+WORKER_LOCK_TIMEOUT=2m
 KYC_VENDOR=<provider>
 KYC_WEBHOOK_SECRET=<vendor-specific-secret>
 ```

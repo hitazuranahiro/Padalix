@@ -1,3 +1,5 @@
+import { headers } from "next/headers";
+
 type SessionIdentity = { user: { id: string; email: string; name: string } };
 
 export type PlatformAccount = {
@@ -72,16 +74,19 @@ export async function platformRawRequest(session: SessionIdentity, path: string,
   const origin = process.env.PLATFORM_API_ORIGIN_URL;
   const token = process.env.PLATFORM_INTERNAL_TOKEN;
   if (!origin || !token) throw new Error("Platform service is not configured.");
+  const correlationId = (await headers()).get("x-correlation-id")?.trim() ?? "";
+  const requestHeaders = new Headers(init.headers);
+  requestHeaders.set("authorization", `Bearer ${token}`);
+  requestHeaders.set("content-type", "application/json");
+  requestHeaders.set("x-padalix-subject", session.user.id);
+  requestHeaders.set("x-padalix-email", session.user.email);
+  requestHeaders.set("x-padalix-name", session.user.name);
+  if (/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(correlationId)) {
+    requestHeaders.set("x-correlation-id", correlationId);
+  }
   return fetch(`${origin}${path}`, {
     ...init,
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      "x-padalix-subject": session.user.id,
-      "x-padalix-email": session.user.email,
-      "x-padalix-name": session.user.name,
-      ...init.headers,
-    },
+    headers: requestHeaders,
     cache: "no-store",
     signal: AbortSignal.timeout(10_000),
   });

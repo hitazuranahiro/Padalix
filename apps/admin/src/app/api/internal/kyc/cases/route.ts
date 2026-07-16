@@ -1,16 +1,107 @@
-import { timingSafeEqual } from "node:crypto";
 import { ingestKycCase } from "@/lib/kyc";
+import { hasInternalKycAuthorization } from "@/lib/internal-auth";
 
-function authorized(request:Request){const supplied=request.headers.get("authorization")?.replace(/^Bearer\s+/i,"")??"";const expected=process.env.KYC_INGEST_SECRET??"";const a=Buffer.from(supplied);const b=Buffer.from(expected);return Boolean(expected)&&a.length===b.length&&timingSafeEqual(a,b);}
-const clean=(value:unknown,max:number)=>typeof value==="string"?value.trim().slice(0,max):"";
-const score=(value:unknown)=>typeof value==="number"&&value>=0&&value<=1?value:undefined;
-export async function POST(request:Request){
-  if(!authorized(request))return Response.json({error:"Unauthorized"},{status:401});
-  const body=await request.json().catch(()=>({})); const documents=Array.isArray(body.documents)?body.documents.slice(0,10):[];
-  const automationBody=body.automation&&typeof body.automation==="object"?body.automation as Record<string,unknown>:null;
-  const automation=automationBody?{provider:clean(automationBody.provider,100),modelName:clean(automationBody.modelName,100),modelVersion:clean(automationBody.modelVersion,100),policyVersion:clean(automationBody.policyVersion,100),documentAuthenticityScore:score(automationBody.documentAuthenticityScore),faceMatchScore:score(automationBody.faceMatchScore),livenessScore:score(automationBody.livenessScore),dataConsistencyScore:score(automationBody.dataConsistencyScore),evidenceSafetyClear:automationBody.evidenceSafetyClear===true,sanctionsClear:typeof automationBody.sanctionsClear==="boolean"?automationBody.sanctionsClear:undefined,pepClear:typeof automationBody.pepClear==="boolean"?automationBody.pepClear:undefined,adverseMediaClear:typeof automationBody.adverseMediaClear==="boolean"?automationBody.adverseMediaClear:undefined,countrySupported:automationBody.countrySupported===true,rawResultReference:clean(automationBody.rawResultReference,500)||undefined}:undefined;
-  const input={authSubject:clean(body.authSubject,200),email:clean(body.email,254).toLowerCase(),fullName:clean(body.fullName,150),countryCode:clean(body.countryCode,2).toUpperCase(),tier:clean(body.tier,40)||"individual_basic",vendorReference:clean(body.vendorReference,200)||undefined,documents:documents.map((item:Record<string,unknown>)=>({type:clean(item.type,40),storageKey:clean(item.storageKey,500),filename:clean(item.filename,200),mimeType:clean(item.mimeType,100),checksumSha256:clean(item.checksumSha256,64)||undefined})),automation};
-  const validTypes=["passport","national_id","drivers_license","proof_of_address","selfie","business_registration","other"];
-  if(!input.authSubject||!/^\S+@\S+\.\S+$/.test(input.email)||input.fullName.length<2||!input.documents.length||input.documents.some((item:{type:string;storageKey:string;filename:string;mimeType:string})=>!validTypes.includes(item.type)||!item.storageKey||!item.filename||!item.mimeType)||automation&&(!automation.provider||!automation.modelName||!automation.modelVersion||!automation.policyVersion))return Response.json({error:"Invalid KYC submission"},{status:400});
-  try{return Response.json(await ingestKycCase(input),{status:201});}catch(error){console.error("KYC ingestion failed",error);return Response.json({error:"KYC submission could not be accepted"},{status:500});}
+const clean = (value: unknown, max: number) =>
+  typeof value === "string" ? value.trim().slice(0, max) : "";
+const score = (value: unknown) =>
+  typeof value === "number" && value >= 0 && value <= 1 ? value : undefined;
+export async function POST(request: Request) {
+  if (!hasInternalKycAuthorization(request))
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await request.json().catch(() => ({}));
+  const documents = Array.isArray(body.documents)
+    ? body.documents.slice(0, 10)
+    : [];
+  const automationBody =
+    body.automation && typeof body.automation === "object"
+      ? (body.automation as Record<string, unknown>)
+      : null;
+  const automation = automationBody
+    ? {
+        provider: clean(automationBody.provider, 100),
+        modelName: clean(automationBody.modelName, 100),
+        modelVersion: clean(automationBody.modelVersion, 100),
+        policyVersion: clean(automationBody.policyVersion, 100),
+        documentAuthenticityScore: score(
+          automationBody.documentAuthenticityScore,
+        ),
+        faceMatchScore: score(automationBody.faceMatchScore),
+        livenessScore: score(automationBody.livenessScore),
+        dataConsistencyScore: score(automationBody.dataConsistencyScore),
+        evidenceSafetyClear: automationBody.evidenceSafetyClear === true,
+        sanctionsClear:
+          typeof automationBody.sanctionsClear === "boolean"
+            ? automationBody.sanctionsClear
+            : undefined,
+        pepClear:
+          typeof automationBody.pepClear === "boolean"
+            ? automationBody.pepClear
+            : undefined,
+        adverseMediaClear:
+          typeof automationBody.adverseMediaClear === "boolean"
+            ? automationBody.adverseMediaClear
+            : undefined,
+        countrySupported: automationBody.countrySupported === true,
+        rawResultReference:
+          clean(automationBody.rawResultReference, 500) || undefined,
+      }
+    : undefined;
+  const input = {
+    authSubject: clean(body.authSubject, 200),
+    email: clean(body.email, 254).toLowerCase(),
+    fullName: clean(body.fullName, 150),
+    countryCode: clean(body.countryCode, 2).toUpperCase(),
+    tier: clean(body.tier, 40) || "individual_basic",
+    vendorReference: clean(body.vendorReference, 200) || undefined,
+    documents: documents.map((item: Record<string, unknown>) => ({
+      type: clean(item.type, 40),
+      storageKey: clean(item.storageKey, 500),
+      filename: clean(item.filename, 200),
+      mimeType: clean(item.mimeType, 100),
+      checksumSha256: clean(item.checksumSha256, 64) || undefined,
+    })),
+    automation,
+  };
+  const validTypes = [
+    "passport",
+    "national_id",
+    "drivers_license",
+    "proof_of_address",
+    "selfie",
+    "business_registration",
+    "other",
+  ];
+  if (
+    !input.authSubject ||
+    !/^\S+@\S+\.\S+$/.test(input.email) ||
+    input.fullName.length < 2 ||
+    !input.documents.length ||
+    input.documents.some(
+      (item: {
+        type: string;
+        storageKey: string;
+        filename: string;
+        mimeType: string;
+      }) =>
+        !validTypes.includes(item.type) ||
+        !item.storageKey ||
+        !item.filename ||
+        !item.mimeType,
+    ) ||
+    (automation &&
+      (!automation.provider ||
+        !automation.modelName ||
+        !automation.modelVersion ||
+        !automation.policyVersion))
+  )
+    return Response.json({ error: "Invalid KYC submission" }, { status: 400 });
+  try {
+    return Response.json(await ingestKycCase(input), { status: 201 });
+  } catch (error) {
+    console.error("KYC ingestion failed", error);
+    return Response.json(
+      { error: "KYC submission could not be accepted" },
+      { status: 500 },
+    );
+  }
 }

@@ -8,10 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -26,6 +30,59 @@ jobs:
           go-version: "1.25.x"
           cache-dependency-path: services/platform/go.sum
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @padalix/admin test
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm build
+      - name: Verify Go race safety and static analysis
+        working-directory: services/platform
+        run: |
+          go test -race ./...
+          go vet ./...
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: bash scripts/check-secrets.sh
+      - name: Reject high-severity production dependency advisories
+        run: pnpm audit --prod --audit-level high
+
+  migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: padalix_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d padalix_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/padalix_ci
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+      - run: bash scripts/check-migrations.sh
+      - name: Apply and replay all migrations
+        run: |
+          bash scripts/migrate-local.sh
+          bash scripts/migrate-local.sh

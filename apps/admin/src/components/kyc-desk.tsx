@@ -1,26 +1,578 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle,ArrowLeft,CheckCircle2,Clock3,FileCheck2,FileText,LoaderCircle,RefreshCw,Search,ShieldAlert,ShieldCheck,XCircle } from "lucide-react";
-import type { KycCase,KycRisk } from "@/lib/kyc";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  Clock3,
+  ExternalLink,
+  FileCheck2,
+  FileText,
+  LoaderCircle,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
+import type { KycCase, KycRisk } from "@/lib/kyc";
 
-type Detail={case:KycCase;documents:Array<Record<string,unknown>>;reviews:Array<Record<string,unknown>>;events:Array<Record<string,unknown>>;assessments:Array<Record<string,unknown>>};
-const risks:KycRisk[]=["unrated","low","medium","high","critical"];
-const statuses=["submitted","in_review","needs_information","approved","rejected","expired"];
-const label=(value:string)=>value.replaceAll("_"," ").replaceAll("."," ").toUpperCase();
-const remaining=(date:string)=>{const hours=Math.round((new Date(date).getTime()-Date.now())/3600000);return hours<0?`${Math.abs(hours)}H OVERDUE`:`${hours}H REMAINING`;};
+type Detail = {
+  case: KycCase;
+  documents: Array<Record<string, unknown>>;
+  reviews: Array<Record<string, unknown>>;
+  events: Array<Record<string, unknown>>;
+  assessments: Array<Record<string, unknown>>;
+};
+const risks: KycRisk[] = ["unrated", "low", "medium", "high", "critical"];
+const statuses = [
+  "submitted",
+  "in_review",
+  "needs_information",
+  "approved",
+  "rejected",
+  "expired",
+];
+const label = (value: string) =>
+  value.replaceAll("_", " ").replaceAll(".", " ").toUpperCase();
+const remaining = (date: string) => {
+  const hours = Math.round((new Date(date).getTime() - Date.now()) / 3600000);
+  return hours < 0 ? `${Math.abs(hours)}H OVERDUE` : `${hours}H REMAINING`;
+};
 
-export function KycDesk({initialCases,initialDetail,reviewer}:{initialCases:KycCase[];initialDetail:Detail|null;reviewer:{name:string;role:string}}){
- const [cases,setCases]=useState(initialCases);const [selected,setSelected]=useState(initialCases[0]?.reference??"");const [detail,setDetail]=useState(initialDetail);const [filters,setFilters]=useState({query:"",status:"",risk:""});const [loading,setLoading]=useState(false);const [error,setError]=useState("");const [action,setAction]=useState("note");
- async function open(reference:string){setSelected(reference);setLoading(true);const response=await fetch(`/api/admin/kyc/cases/${reference}`);const data=await response.json();if(response.ok)setDetail(data);else setError(data.error);setLoading(false);}
- const refresh=useCallback(async(next=filters)=>{const params=new URLSearchParams(Object.entries(next).filter(([,value])=>value));const response=await fetch(`/api/admin/kyc/cases?${params}`);const data=await response.json();if(response.ok)setCases(data.cases);else setError(data.error);},[filters]);
- useEffect(()=>{const timer=window.setInterval(()=>{if(document.visibilityState==="visible")void refresh();},15000);return()=>window.clearInterval(timer);},[refresh]);
- async function apply(payload:Record<string,unknown>){if(!selected)return;setLoading(true);const response=await fetch(`/api/admin/kyc/cases/${selected}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await response.json();if(response.ok){setDetail(data);await refresh();}else setError(data.error);setLoading(false);}
- async function submit(event:React.FormEvent<HTMLFormElement>){event.preventDefault();const form=event.currentTarget;const values=Object.fromEntries(new FormData(form));await apply({action,note:values.note,reasonCode:values.reasonCode||undefined});if(!error)form.reset();}
- return <div className="kyc-admin"><aside className="kyc-queue"><header><div><p>COMPLIANCE OPERATIONS</p><h1>Identity review</h1></div><ShieldCheck size={22}/></header><form className="kyc-filters" onSubmit={event=>{event.preventDefault();void refresh();}}><label><Search size={15}/><input aria-label="Search KYC cases" placeholder="CASE, MEMBER, EMAIL" value={filters.query} onChange={event=>setFilters({...filters,query:event.target.value})}/></label><div><select aria-label="Filter KYC status" value={filters.status} onChange={event=>{const next={...filters,status:event.target.value};setFilters(next);void refresh(next);}}><option value="">ALL STATUS</option>{statuses.map(value=><option value={value} key={value}>{label(value)}</option>)}</select><select aria-label="Filter risk" value={filters.risk} onChange={event=>{const next={...filters,risk:event.target.value};setFilters(next);void refresh(next);}}><option value="">ALL RISK</option>{risks.map(value=><option value={value} key={value}>{label(value)}</option>)}</select></div></form><div className="kyc-summary"><span>{cases.length} CASES</span><span>{cases.filter(item=>!["approved","rejected","expired"].includes(item.status)).length} PENDING</span><button aria-label="Refresh KYC cases" disabled={loading} onClick={()=>void refresh()}><RefreshCw className={loading?"spin":""} size={13}/></button></div><div className="kyc-list">{cases.map(item=><button className={selected===item.reference?"active":""} key={item.reference} onClick={()=>open(item.reference)}><i className={`risk-${item.riskLevel}`}/><span><small>{item.reference} / {label(item.status)}</small><strong>{item.memberName}</strong><em>{item.memberEmail}</em></span><time className={new Date(item.reviewDueAt)<new Date()?"overdue":""}>{remaining(item.reviewDueAt)}</time></button>)}{!cases.length&&<p>No identity cases in this queue.</p>}</div></aside><main className="kyc-panel">
- {!detail&&<div className="kyc-empty">{loading?<LoaderCircle className="spin"/>:<FileCheck2/>}<p>Select an identity case for review.</p></div>}
- {detail&&<><header className="kyc-case-header"><div><button className="kyc-back" aria-label="Return to KYC queue" onClick={()=>{setSelected("");setDetail(null);}}><ArrowLeft size={17}/></button><p>{detail.case.reference} / {label(detail.case.tier)}</p><h2>{detail.case.memberName}</h2><span>{detail.case.memberEmail} · {detail.case.countryCode??"COUNTRY UNSET"}</span></div><b className={`kyc-state state-${detail.case.status}`}>{label(detail.case.status)}</b></header>
- <section className="kyc-controls"><label><span>Risk rating</span><select value={detail.case.riskLevel} onChange={event=>apply({action:"risk_change",riskLevel:event.target.value,note:`Risk rating changed to ${event.target.value}.`})}>{risks.map(value=><option key={value} value={value}>{label(value)}</option>)}</select></label><label><span>Reviewer</span><select value={detail.case.assignedTo??""} onChange={event=>apply({action:"assign",assignedTo:event.target.value||null,note:event.target.value?`Assigned to ${event.target.value}.`:"Assignment cleared."})}><option value="">UNASSIGNED</option><option value={reviewer.name}>{reviewer.name.toUpperCase()}</option></select></label><div><span>Review SLA</span><strong className={new Date(detail.case.reviewDueAt)<new Date()?"overdue":""}><Clock3 size={14}/>{remaining(detail.case.reviewDueAt)}</strong></div><div><span>Documents</span><strong><FileText size={14}/>{detail.documents.length} RECEIVED</strong></div></section>
- <div className="kyc-case-body"><section className="kyc-evidence">{detail.assessments.length>0&&<><div className="kyc-title"><ShieldCheck size={16}/>AUTOMATION ASSESSMENT</div><div className="automation-assessment">{detail.assessments.map(assessment=><article key={String(assessment.id)}><header><div><strong>{label(String(assessment.recommendation))}</strong><small>{String(assessment.provider)} / {String(assessment.model_name)} {String(assessment.model_version)}</small></div><b>POLICY {String(assessment.policy_version)}</b></header><dl><div><dt>Document</dt><dd>{assessment.document_authenticity_score===null?"N/A":`${Math.round(Number(assessment.document_authenticity_score)*100)}%`}</dd></div><div><dt>Face match</dt><dd>{assessment.face_match_score===null?"N/A":`${Math.round(Number(assessment.face_match_score)*100)}%`}</dd></div><div><dt>Liveness</dt><dd>{assessment.liveness_score===null?"N/A":`${Math.round(Number(assessment.liveness_score)*100)}%`}</dd></div><div><dt>Consistency</dt><dd>{assessment.data_consistency_score===null?"N/A":`${Math.round(Number(assessment.data_consistency_score)*100)}%`}</dd></div></dl><p>{Array.isArray(assessment.reason_codes)&&assessment.reason_codes.length?assessment.reason_codes.map(value=>label(String(value))).join(" / "):"ALL AUTOMATION GATES PASSED"}</p></article>)}</div></>}<div className="kyc-title"><FileCheck2 size={16}/>EVIDENCE PACKAGE</div><div className="document-list">{detail.documents.map(document=><article key={String(document.id)}><FileText size={19}/><span><strong>{label(String(document.document_type))}</strong><small>{String(document.filename)} · {String(document.mime_type)}</small></span><b>{label(String(document.verification_status))}</b></article>)}</div><div className="kyc-title"><ShieldAlert size={16}/>REVIEW LOG</div><div className="review-log">{detail.reviews.map(review=><article key={String(review.id)}><header><strong>{String(review.reviewer_name)} / {label(String(review.action))}</strong><time>{new Date(String(review.created_at)).toLocaleString()}</time></header><p>{String(review.note??"No note supplied")}</p></article>)}{!detail.reviews.length&&<p>No reviewer actions recorded.</p>}</div></section>
- <aside className="kyc-decision"><div className="kyc-title"><ShieldCheck size={16}/>DECISION CONTROL</div><div className="decision-tabs"><button className={action==="note"?"active":""} onClick={()=>setAction("note")}>NOTE</button><button className={action==="request_information"?"active":""} onClick={()=>setAction("request_information")}>REQUEST INFO</button><button className={action==="approve"?"active":""} onClick={()=>setAction("approve")}>APPROVE</button><button className={action==="reject"?"active":""} onClick={()=>setAction("reject")}>REJECT</button></div><form onSubmit={submit}>{["request_information","reject"].includes(action)&&<label><span>Reason code</span><select name="reasonCode" required><option value="">SELECT REASON</option><option value="document_unreadable">DOCUMENT UNREADABLE</option><option value="identity_mismatch">IDENTITY MISMATCH</option><option value="expired_document">EXPIRED DOCUMENT</option><option value="additional_evidence">ADDITIONAL EVIDENCE</option><option value="policy_restriction">POLICY RESTRICTION</option></select></label>}<label><span>{action==="note"?"Internal review note":"Decision explanation"}</span><textarea name="note" rows={7} required placeholder="Record the evidence and rationale for this action."/></label>{detail.case.riskLevel==="critical"&&reviewer.role!=="admin"&&["approve","reject"].includes(action)&&<p className="critical-warning"><AlertTriangle size={14}/>Critical-risk decisions require administrator approval.</p>}<button className={`decision-submit action-${action}`} disabled={loading||(detail.case.riskLevel==="critical"&&reviewer.role!=="admin"&&["approve","reject"].includes(action))}>{action==="approve"?<CheckCircle2 size={16}/>:action==="reject"?<XCircle size={16}/>:<FileCheck2 size={16}/>} {label(action)}</button></form><div className="decision-policy"><strong>CONTROL POLICY</strong><p>All decisions are append-only and member notifications are queued automatically. Critical-risk decisions require administrator approval.</p></div></aside></div></>}
- {error&&<div className="admin-error">{error}<button onClick={()=>setError("")}>DISMISS</button></div>}</main></div>;
+export function KycDesk({
+  initialCases,
+  initialDetail,
+  reviewer,
+}: {
+  initialCases: KycCase[];
+  initialDetail: Detail | null;
+  reviewer: { name: string; role: string };
+}) {
+  const [cases, setCases] = useState(initialCases);
+  const [selected, setSelected] = useState(initialCases[0]?.reference ?? "");
+  const [detail, setDetail] = useState(initialDetail);
+  const [filters, setFilters] = useState({ query: "", status: "", risk: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [action, setAction] = useState("note");
+  async function open(reference: string) {
+    setSelected(reference);
+    setLoading(true);
+    const response = await fetch(`/api/admin/kyc/cases/${reference}`);
+    const data = await response.json();
+    if (response.ok) setDetail(data);
+    else setError(data.error);
+    setLoading(false);
+  }
+  const refresh = useCallback(
+    async (next = filters) => {
+      const params = new URLSearchParams(
+        Object.entries(next).filter(([, value]) => value),
+      );
+      const response = await fetch(`/api/admin/kyc/cases?${params}`);
+      const data = await response.json();
+      if (response.ok) setCases(data.cases);
+      else setError(data.error);
+    },
+    [filters],
+  );
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+  async function apply(payload: Record<string, unknown>) {
+    if (!selected) return;
+    setLoading(true);
+    const response = await fetch(`/api/admin/kyc/cases/${selected}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setDetail(data);
+      await refresh();
+    } else setError(data.error);
+    setLoading(false);
+  }
+  async function viewEvidence(documentId: string) {
+    const viewer = window.open("about:blank", "_blank");
+    if (viewer) viewer.opener = null;
+    const response = await fetch(
+      `/api/admin/kyc/evidence/${documentId}/access`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purpose: "identity_review" }),
+      },
+    );
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && data.url) {
+      if (viewer) viewer.location.replace(data.url);
+      else window.location.assign(data.url);
+    } else {
+      viewer?.close();
+      setError(data.error ?? "Evidence access failed.");
+    }
+  }
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    await apply({
+      action,
+      note: values.note,
+      reasonCode: values.reasonCode || undefined,
+    });
+    if (!error) form.reset();
+  }
+  return (
+    <div className="kyc-admin">
+      <aside className="kyc-queue">
+        <header>
+          <div>
+            <p>COMPLIANCE OPERATIONS</p>
+            <h1>Identity review</h1>
+          </div>
+          <ShieldCheck size={22} />
+        </header>
+        <form
+          className="kyc-filters"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void refresh();
+          }}
+        >
+          <label>
+            <Search size={15} />
+            <input
+              aria-label="Search KYC cases"
+              placeholder="CASE, MEMBER, EMAIL"
+              value={filters.query}
+              onChange={(event) =>
+                setFilters({ ...filters, query: event.target.value })
+              }
+            />
+          </label>
+          <div>
+            <select
+              aria-label="Filter KYC status"
+              value={filters.status}
+              onChange={(event) => {
+                const next = { ...filters, status: event.target.value };
+                setFilters(next);
+                void refresh(next);
+              }}
+            >
+              <option value="">ALL STATUS</option>
+              {statuses.map((value) => (
+                <option value={value} key={value}>
+                  {label(value)}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Filter risk"
+              value={filters.risk}
+              onChange={(event) => {
+                const next = { ...filters, risk: event.target.value };
+                setFilters(next);
+                void refresh(next);
+              }}
+            >
+              <option value="">ALL RISK</option>
+              {risks.map((value) => (
+                <option value={value} key={value}>
+                  {label(value)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </form>
+        <div className="kyc-summary">
+          <span>{cases.length} CASES</span>
+          <span>
+            {
+              cases.filter(
+                (item) =>
+                  !["approved", "rejected", "expired"].includes(item.status),
+              ).length
+            }{" "}
+            PENDING
+          </span>
+          <button
+            aria-label="Refresh KYC cases"
+            disabled={loading}
+            onClick={() => void refresh()}
+          >
+            <RefreshCw className={loading ? "spin" : ""} size={13} />
+          </button>
+        </div>
+        <div className="kyc-list">
+          {cases.map((item) => (
+            <button
+              className={selected === item.reference ? "active" : ""}
+              key={item.reference}
+              onClick={() => open(item.reference)}
+            >
+              <i className={`risk-${item.riskLevel}`} />
+              <span>
+                <small>
+                  {item.reference} / {label(item.status)}
+                </small>
+                <strong>{item.memberName}</strong>
+                <em>{item.memberEmail}</em>
+              </span>
+              <time
+                className={
+                  new Date(item.reviewDueAt) < new Date() ? "overdue" : ""
+                }
+              >
+                {remaining(item.reviewDueAt)}
+              </time>
+            </button>
+          ))}
+          {!cases.length && <p>No identity cases in this queue.</p>}
+        </div>
+      </aside>
+      <main className="kyc-panel">
+        {!detail && (
+          <div className="kyc-empty">
+            {loading ? <LoaderCircle className="spin" /> : <FileCheck2 />}
+            <p>Select an identity case for review.</p>
+          </div>
+        )}
+        {detail && (
+          <>
+            <header className="kyc-case-header">
+              <div>
+                <button
+                  className="kyc-back"
+                  aria-label="Return to KYC queue"
+                  onClick={() => {
+                    setSelected("");
+                    setDetail(null);
+                  }}
+                >
+                  <ArrowLeft size={17} />
+                </button>
+                <p>
+                  {detail.case.reference} / {label(detail.case.tier)}
+                </p>
+                <h2>{detail.case.memberName}</h2>
+                <span>
+                  {detail.case.memberEmail} ·{" "}
+                  {detail.case.countryCode ?? "COUNTRY UNSET"}
+                </span>
+              </div>
+              <b className={`kyc-state state-${detail.case.status}`}>
+                {label(detail.case.status)}
+              </b>
+            </header>
+            <section className="kyc-controls">
+              <label>
+                <span>Risk rating</span>
+                <select
+                  value={detail.case.riskLevel}
+                  onChange={(event) =>
+                    apply({
+                      action: "risk_change",
+                      riskLevel: event.target.value,
+                      note: `Risk rating changed to ${event.target.value}.`,
+                    })
+                  }
+                >
+                  {risks.map((value) => (
+                    <option key={value} value={value}>
+                      {label(value)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Reviewer</span>
+                <select
+                  value={detail.case.assignedTo ?? ""}
+                  onChange={(event) =>
+                    apply({
+                      action: "assign",
+                      assignedTo: event.target.value || null,
+                      note: event.target.value
+                        ? `Assigned to ${event.target.value}.`
+                        : "Assignment cleared.",
+                    })
+                  }
+                >
+                  <option value="">UNASSIGNED</option>
+                  <option value={reviewer.name}>
+                    {reviewer.name.toUpperCase()}
+                  </option>
+                </select>
+              </label>
+              <div>
+                <span>Review SLA</span>
+                <strong
+                  className={
+                    new Date(detail.case.reviewDueAt) < new Date()
+                      ? "overdue"
+                      : ""
+                  }
+                >
+                  <Clock3 size={14} />
+                  {remaining(detail.case.reviewDueAt)}
+                </strong>
+              </div>
+              <div>
+                <span>Documents</span>
+                <strong>
+                  <FileText size={14} />
+                  {detail.documents.length} RECEIVED
+                </strong>
+              </div>
+            </section>
+            <div className="kyc-case-body">
+              <section className="kyc-evidence">
+                {detail.assessments.length > 0 && (
+                  <>
+                    <div className="kyc-title">
+                      <ShieldCheck size={16} />
+                      AUTOMATION ASSESSMENT
+                    </div>
+                    <div className="automation-assessment">
+                      {detail.assessments.map((assessment) => (
+                        <article key={String(assessment.id)}>
+                          <header>
+                            <div>
+                              <strong>
+                                {label(String(assessment.recommendation))}
+                              </strong>
+                              <small>
+                                {String(assessment.provider)} /{" "}
+                                {String(assessment.model_name)}{" "}
+                                {String(assessment.model_version)}
+                              </small>
+                            </div>
+                            <b>POLICY {String(assessment.policy_version)}</b>
+                          </header>
+                          <dl>
+                            <div>
+                              <dt>Document</dt>
+                              <dd>
+                                {assessment.document_authenticity_score === null
+                                  ? "N/A"
+                                  : `${Math.round(Number(assessment.document_authenticity_score) * 100)}%`}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Face match</dt>
+                              <dd>
+                                {assessment.face_match_score === null
+                                  ? "N/A"
+                                  : `${Math.round(Number(assessment.face_match_score) * 100)}%`}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Liveness</dt>
+                              <dd>
+                                {assessment.liveness_score === null
+                                  ? "N/A"
+                                  : `${Math.round(Number(assessment.liveness_score) * 100)}%`}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Consistency</dt>
+                              <dd>
+                                {assessment.data_consistency_score === null
+                                  ? "N/A"
+                                  : `${Math.round(Number(assessment.data_consistency_score) * 100)}%`}
+                              </dd>
+                            </div>
+                          </dl>
+                          <p>
+                            {Array.isArray(assessment.reason_codes) &&
+                            assessment.reason_codes.length
+                              ? assessment.reason_codes
+                                  .map((value) => label(String(value)))
+                                  .join(" / ")
+                              : "ALL AUTOMATION GATES PASSED"}
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <div className="kyc-title">
+                  <FileCheck2 size={16} />
+                  EVIDENCE PACKAGE
+                </div>
+                <div className="document-list">
+                  {detail.documents.map((document) => (
+                    <article key={String(document.id)}>
+                      <FileText size={19} />
+                      <span>
+                        <strong>{label(String(document.document_type))}</strong>
+                        <small>
+                          {String(document.filename)} ·{" "}
+                          {String(document.mime_type)}
+                          {document.verified_size_bytes
+                            ? ` · ${Math.ceil(Number(document.verified_size_bytes) / 1024)} KB`
+                            : ""}
+                        </small>
+                      </span>
+                      {document.evidence_object_id ? (
+                        <button
+                          className="kyc-state"
+                          onClick={() => void viewEvidence(String(document.id))}
+                        >
+                          <ExternalLink size={13} /> VIEW
+                        </button>
+                      ) : (
+                        <b>{label(String(document.verification_status))}</b>
+                      )}
+                    </article>
+                  ))}
+                </div>
+                <div className="kyc-title">
+                  <ShieldAlert size={16} />
+                  REVIEW LOG
+                </div>
+                <div className="review-log">
+                  {detail.reviews.map((review) => (
+                    <article key={String(review.id)}>
+                      <header>
+                        <strong>
+                          {String(review.reviewer_name)} /{" "}
+                          {label(String(review.action))}
+                        </strong>
+                        <time>
+                          {new Date(String(review.created_at)).toLocaleString()}
+                        </time>
+                      </header>
+                      <p>{String(review.note ?? "No note supplied")}</p>
+                    </article>
+                  ))}
+                  {!detail.reviews.length && (
+                    <p>No reviewer actions recorded.</p>
+                  )}
+                </div>
+              </section>
+              <aside className="kyc-decision">
+                <div className="kyc-title">
+                  <ShieldCheck size={16} />
+                  DECISION CONTROL
+                </div>
+                <div className="decision-tabs">
+                  <button
+                    className={action === "note" ? "active" : ""}
+                    onClick={() => setAction("note")}
+                  >
+                    NOTE
+                  </button>
+                  <button
+                    className={action === "request_information" ? "active" : ""}
+                    onClick={() => setAction("request_information")}
+                  >
+                    REQUEST INFO
+                  </button>
+                  <button
+                    className={action === "approve" ? "active" : ""}
+                    onClick={() => setAction("approve")}
+                  >
+                    APPROVE
+                  </button>
+                  <button
+                    className={action === "reject" ? "active" : ""}
+                    onClick={() => setAction("reject")}
+                  >
+                    REJECT
+                  </button>
+                </div>
+                <form onSubmit={submit}>
+                  {["request_information", "reject"].includes(action) && (
+                    <label>
+                      <span>Reason code</span>
+                      <select name="reasonCode" required>
+                        <option value="">SELECT REASON</option>
+                        <option value="document_unreadable">
+                          DOCUMENT UNREADABLE
+                        </option>
+                        <option value="identity_mismatch">
+                          IDENTITY MISMATCH
+                        </option>
+                        <option value="expired_document">
+                          EXPIRED DOCUMENT
+                        </option>
+                        <option value="additional_evidence">
+                          ADDITIONAL EVIDENCE
+                        </option>
+                        <option value="policy_restriction">
+                          POLICY RESTRICTION
+                        </option>
+                      </select>
+                    </label>
+                  )}
+                  <label>
+                    <span>
+                      {action === "note"
+                        ? "Internal review note"
+                        : "Decision explanation"}
+                    </span>
+                    <textarea
+                      name="note"
+                      rows={7}
+                      required
+                      placeholder="Record the evidence and rationale for this action."
+                    />
+                  </label>
+                  {detail.case.riskLevel === "critical" &&
+                    reviewer.role !== "admin" &&
+                    ["approve", "reject"].includes(action) && (
+                      <p className="critical-warning">
+                        <AlertTriangle size={14} />
+                        Critical-risk decisions require administrator approval.
+                      </p>
+                    )}
+                  <button
+                    className={`decision-submit action-${action}`}
+                    disabled={
+                      loading ||
+                      (detail.case.riskLevel === "critical" &&
+                        reviewer.role !== "admin" &&
+                        ["approve", "reject"].includes(action))
+                    }
+                  >
+                    {action === "approve" ? (
+                      <CheckCircle2 size={16} />
+                    ) : action === "reject" ? (
+                      <XCircle size={16} />
+                    ) : (
+                      <FileCheck2 size={16} />
+                    )}{" "}
+                    {label(action)}
+                  </button>
+                </form>
+                <div className="decision-policy">
+                  <strong>CONTROL POLICY</strong>
+                  <p>
+                    All decisions are append-only and member notifications are
+                    queued automatically. Critical-risk decisions require
+                    administrator approval.
+                  </p>
+                </div>
+              </aside>
+            </div>
+          </>
+        )}
+        {error && (
+          <div className="admin-error">
+            {error}
+            <button onClick={() => setError("")}>DISMISS</button>
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }

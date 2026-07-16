@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stellar/go-stellar-sdk/network"
 )
@@ -25,6 +27,7 @@ type stellarPaymentRecord struct {
 	AssetCode        string
 	AssetIssuer      string
 	Amount           string
+	FeeAmount        string
 	UnsignedXDR      string
 	TransactionHash  string
 	Status           string
@@ -274,11 +277,27 @@ func (s *Service) submitStellarPayment(w http.ResponseWriter, r *http.Request) {
 	}
 	switch strings.ToUpper(submission.Status) {
 	case "PENDING", "DUPLICATE":
-		_, err = s.db.Exec(r.Context(), `update platform.stellar_payment_intent set
+		dbtx, beginErr := s.db.Begin(r.Context())
+		if beginErr != nil {
+			writeError(w, http.StatusInternalServerError, "Stellar submission could not be recorded")
+			return
+		}
+		defer dbtx.Rollback(r.Context())
+		_, err = dbtx.Exec(r.Context(), `update platform.stellar_payment_intent set
 			status='submitted',submission_status=$1,submitted_at=coalesce(submitted_at,now()),updated_at=now()
 			where id=$2 and account_id=$3 and status='prepared'`, submission.Status, record.ID, acct.ID)
 		if err == nil {
-			_, err = s.db.Exec(r.Context(), `update platform.transfer set status='submitted' where id=$1 and account_id=$2 and status='prepared'`, record.TransferID, acct.ID)
+			_, err = dbtx.Exec(r.Context(), `update platform.transfer set status='submitted' where id=$1 and account_id=$2 and status='prepared'`, record.TransferID, acct.ID)
+		}
+		if err == nil {
+			_, err = dbtx.Exec(r.Context(), `insert into platform.outbox_job(
+				id,topic,aggregate_type,aggregate_id,idempotency_key,payload,status,max_attempts
+			) values($1,$2,'stellar_payment',$3,$4,$5,'pending',12)
+			 on conflict(idempotency_key) do nothing`, newID(), stellarReconcileTopic, record.ID,
+				"stellar-reconcile:"+record.ID, map[string]string{"paymentIntentId": record.ID, "transactionHash": record.TransactionHash})
+		}
+		if err == nil {
+			err = dbtx.Commit(r.Context())
 		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "Stellar submission could not be recorded")
@@ -328,7 +347,7 @@ func (s *Service) getStellarPayment(w http.ResponseWriter, r *http.Request) {
 		}
 		switch strings.ToUpper(result.Status) {
 		case "SUCCESS":
-			if err := s.confirmStellarPayment(r, record, int64(result.Ledger)); err != nil {
+			if err := confirmStellarPaymentContext(r.Context(), s.db, record, int64(result.Ledger)); err != nil {
 				slog.Error("Stellar confirmation persistence failed", "payment_id", record.ID, "transfer_id", record.TransferID, "error", err)
 				writeError(w, http.StatusInternalServerError, "Stellar confirmation could not be recorded")
 				return
@@ -357,15 +376,19 @@ func (s *Service) stellarPaymentByID(r *http.Request, accountID, paymentID strin
 
 const stellarPaymentSelect = `select
 	i.id,i.account_id,i.transfer_id,t.reference,i.wallet_link_id,i.source_public_key,i.destination_public_key,
-	i.asset_code,coalesce(i.asset_issuer,''),i.amount::text,i.unsigned_xdr,i.transaction_hash,i.status,
+	i.asset_code,coalesce(i.asset_issuer,''),i.amount::text,t.fee_amount::text,i.unsigned_xdr,i.transaction_hash,i.status,
 	coalesce(i.submission_status,''),coalesce(i.ledger,0),i.expires_at,i.submitted_at,i.confirmed_at
 from platform.stellar_payment_intent i join platform.transfer t on t.id=i.transfer_id`
 
 func (s *Service) scanStellarPayment(row rowScanner) (stellarPaymentRecord, error) {
+	return scanStellarPaymentRow(row)
+}
+
+func scanStellarPaymentRow(row rowScanner) (stellarPaymentRecord, error) {
 	var record stellarPaymentRecord
 	err := row.Scan(
 		&record.ID, &record.AccountID, &record.TransferID, &record.Reference, &record.WalletLinkID,
-		&record.Source, &record.Destination, &record.AssetCode, &record.AssetIssuer, &record.Amount,
+		&record.Source, &record.Destination, &record.AssetCode, &record.AssetIssuer, &record.Amount, &record.FeeAmount,
 		&record.UnsignedXDR, &record.TransactionHash, &record.Status, &record.SubmissionStatus,
 		&record.Ledger, &record.ExpiresAt, &record.SubmittedAt, &record.ConfirmedAt,
 	)
@@ -398,34 +421,63 @@ func (s *Service) expireStellarPayment(r *http.Request, record stellarPaymentRec
 }
 
 func (s *Service) failStellarPayment(r *http.Request, record stellarPaymentRecord, code string) {
-	tag, _ := s.db.Exec(r.Context(), `update platform.stellar_payment_intent set status='failed',failure_code=$1,updated_at=now()
-		where id=$2 and account_id=$3 and status <> 'failed'`, code, record.ID, record.AccountID)
-	_, _ = s.db.Exec(r.Context(), `update platform.transfer set status='failed' where id=$1 and account_id=$2 and status <> 'confirmed'`, record.TransferID, record.AccountID)
-	if tag.RowsAffected() > 0 {
-		_, _ = s.db.Exec(r.Context(), `insert into platform.activity_event(account_id,event_type,resource_type,resource_id,summary,metadata)
-			values($1,'transfer.failed','stellar_payment',$2,'Stellar testnet payment failed',$3)`, record.AccountID, record.TransferID, map[string]string{"reference": record.Reference, "failureCode": code})
-	}
+	_ = failStellarPaymentContext(r.Context(), s.db, record, code)
 }
 
-func (s *Service) confirmStellarPayment(r *http.Request, record stellarPaymentRecord, ledger int64) error {
-	tx, err := s.db.Begin(r.Context())
+func failStellarPaymentContext(ctx context.Context, db *pgxpool.Pool, record stellarPaymentRecord, code string) error {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx, `update platform.stellar_payment_intent set status='failed',failure_code=$1,
+		reconciliation_status='matched',reconciled_at=now(),updated_at=now()
+		where id=$2 and account_id=$3 and status not in ('failed','confirmed')`, code, record.ID, record.AccountID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return tx.Commit(ctx)
+	}
+	if _, err = tx.Exec(ctx, `update platform.transfer set status='failed' where id=$1 and account_id=$2 and status <> 'confirmed'`, record.TransferID, record.AccountID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `insert into platform.activity_event(account_id,event_type,resource_type,resource_id,summary,metadata)
+		values($1,'transfer.failed','stellar_payment',$2,'Stellar testnet payment failed',$3)`, record.AccountID, record.TransferID,
+		map[string]string{"reference": record.Reference, "failureCode": code}); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `insert into notification.outbox(member_id,category,template_key,recipient,payload,idempotency_key)
+		select m.id,'transactional','stellar_transfer_failed_v1',m.email,$1,$2 from platform.account a
+		join identity.member m on m.id=a.member_id where a.id=$3 on conflict(idempotency_key) do nothing`,
+		map[string]string{"reference": record.Reference, "asset": record.AssetCode, "amount": record.Amount, "failureCode": code},
+		"stellar-failed:"+record.ID, record.AccountID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func confirmStellarPaymentContext(ctx context.Context, db *pgxpool.Pool, record stellarPaymentRecord, ledger int64) error {
+	tx, err := db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback(r.Context())
-	tag, err := tx.Exec(r.Context(), `update platform.stellar_payment_intent set
-		status='confirmed',submission_status='SUCCESS',ledger=$1,confirmed_at=coalesce(confirmed_at,now()),updated_at=now()
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx, `update platform.stellar_payment_intent set
+		status='confirmed',submission_status='SUCCESS',ledger=$1,confirmed_at=coalesce(confirmed_at,now()),
+		reconciliation_status='matched',reconciled_at=now(),updated_at=now()
 		where id=$2 and account_id=$3 and status <> 'confirmed'`, ledger, record.ID, record.AccountID)
 	if err != nil {
 		return fmt.Errorf("update payment intent: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		if err := tx.Commit(r.Context()); err != nil {
+		if err := tx.Commit(ctx); err != nil {
 			return fmt.Errorf("commit existing confirmation: %w", err)
 		}
 		return nil
 	}
-	if _, err = tx.Exec(r.Context(), `update platform.transfer set status='confirmed',confirmed_at=coalesce(confirmed_at,now())
+	if _, err = tx.Exec(ctx, `update platform.transfer set status='confirmed',confirmed_at=coalesce(confirmed_at,now())
 		where id=$1 and account_id=$2`, record.TransferID, record.AccountID); err != nil {
 		return fmt.Errorf("update transfer: %w", err)
 	}
@@ -433,7 +485,7 @@ func (s *Service) confirmStellarPayment(r *http.Request, record stellarPaymentRe
 	if record.AssetIssuer != "" {
 		issuer = record.AssetIssuer
 	}
-	_, err = tx.Exec(r.Context(), `insert into platform.transfer_evidence_event(
+	_, err = tx.Exec(ctx, `insert into platform.transfer_evidence_event(
 		id,transfer_id,evidence_type,provider_key,provider_environment,provider_transaction_id,
 		provider_reference,provider_status,stellar_network,stellar_transaction_hash,stellar_ledger,
 		stellar_source_account,stellar_destination_account,stellar_asset_code,stellar_asset_issuer,
@@ -445,14 +497,101 @@ func (s *Service) confirmStellarPayment(r *http.Request, record stellarPaymentRe
 	if err != nil {
 		return fmt.Errorf("insert transaction evidence: %w", err)
 	}
-	_, err = tx.Exec(r.Context(), `insert into platform.activity_event(account_id,event_type,resource_type,resource_id,summary,metadata)
+	if err = postStellarLedger(ctx, tx, record); err != nil {
+		return fmt.Errorf("post Stellar ledger: %w", err)
+	}
+	_, err = tx.Exec(ctx, `insert into platform.activity_event(account_id,event_type,resource_type,resource_id,summary,metadata)
 		values($1,'transfer.confirmed','transfer',$2,'Stellar testnet payment confirmed',$3)`, record.AccountID, record.TransferID,
 		map[string]string{"reference": record.Reference, "transactionHash": record.TransactionHash, "amount": record.Amount, "asset": record.AssetCode})
 	if err != nil {
 		return fmt.Errorf("insert confirmation activity: %w", err)
 	}
-	if err := tx.Commit(r.Context()); err != nil {
+	if _, err = tx.Exec(ctx, `insert into notification.outbox(member_id,category,template_key,recipient,payload,idempotency_key)
+		select m.id,'transactional','stellar_transfer_confirmed_v1',m.email,$1,$2 from platform.account a
+		join identity.member m on m.id=a.member_id where a.id=$3 on conflict(idempotency_key) do nothing`,
+		map[string]string{"reference": record.Reference, "asset": record.AssetCode, "amount": record.Amount, "transactionHash": record.TransactionHash},
+		"stellar-confirmed:"+record.ID, record.AccountID); err != nil {
+		return fmt.Errorf("enqueue confirmation notification: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit confirmation: %w", err)
 	}
 	return nil
+}
+
+func postStellarLedger(ctx context.Context, tx pgx.Tx, record stellarPaymentRecord) error {
+	ledgerID := newID()
+	if _, err := tx.Exec(ctx, `insert into platform.ledger_transaction(id,reference,transfer_id)
+		values($1,$2,$3) on conflict(transfer_id) do nothing`, ledgerID, record.Reference, record.TransferID); err != nil {
+		return err
+	}
+	if err := tx.QueryRow(ctx, `select id from platform.ledger_transaction where transfer_id=$1`, record.TransferID).Scan(&ledgerID); err != nil {
+		return err
+	}
+	amount, ok := new(big.Rat).SetString(record.Amount)
+	if !ok {
+		return errors.New("invalid Stellar ledger amount")
+	}
+	fee, ok := new(big.Rat).SetString(record.FeeAmount)
+	if !ok {
+		return errors.New("invalid Stellar fee amount")
+	}
+	type posting struct{ accountID, amount string }
+	postings := make([]posting, 0, 4)
+	externalAsset, err := ensureLedgerAccount(ctx, tx, record.AccountID,
+		"external:"+record.AccountID+":"+strings.ToLower(record.AssetCode)+":stellar_testnet", record.AssetCode)
+	if err != nil {
+		return err
+	}
+	settlement, err := ensureLedgerAccount(ctx, tx, "", "system:stellar_testnet:settlement:"+strings.ToLower(record.AssetCode), record.AssetCode)
+	if err != nil {
+		return err
+	}
+	postings = append(postings,
+		posting{externalAsset, decimal(new(big.Rat).Neg(amount), 7)},
+		posting{settlement, record.Amount},
+	)
+	if fee.Sign() > 0 {
+		externalFee := externalAsset
+		if record.AssetCode != "XLM" {
+			externalFee, err = ensureLedgerAccount(ctx, tx, record.AccountID,
+				"external:"+record.AccountID+":xlm:stellar_testnet", "XLM")
+			if err != nil {
+				return err
+			}
+		}
+		fees, err := ensureLedgerAccount(ctx, tx, "", "system:stellar_testnet:network_fees:xlm", "XLM")
+		if err != nil {
+			return err
+		}
+		postings = append(postings,
+			posting{externalFee, decimal(new(big.Rat).Neg(fee), 7)},
+			posting{fees, record.FeeAmount},
+		)
+	}
+	for index, posting := range postings {
+		if _, err := tx.Exec(ctx, `insert into platform.ledger_posting(id,transaction_id,ledger_account_id,amount)
+			values($1,$2,$3,$4) on conflict do nothing`, ledgerPostingID(ledgerID, index), ledgerID, posting.accountID, posting.amount); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureLedgerAccount(ctx context.Context, tx pgx.Tx, accountID, code, asset string) (string, error) {
+	id := newID()
+	var owner any
+	if accountID != "" {
+		owner = accountID
+	}
+	if _, err := tx.Exec(ctx, `insert into platform.ledger_account(id,account_id,code,asset_code)
+		values($1,$2,$3,$4) on conflict(code) do nothing`, id, owner, code, asset); err != nil {
+		return "", err
+	}
+	err := tx.QueryRow(ctx, `select id from platform.ledger_account where code=$1`, code).Scan(&id)
+	return id, err
+}
+
+func ledgerPostingID(transactionID string, index int) string {
+	return fmt.Sprintf("%s-%d", transactionID, index)
 }

@@ -9,6 +9,18 @@ export type TicketStatus = (typeof ticketStatuses)[number];
 export type TicketPriority = (typeof ticketPriorities)[number];
 export type TicketCategory = (typeof ticketCategories)[number];
 
+const ticketCreationLimit = 5;
+const ticketCreationWindowSeconds = 60 * 60;
+const customerMessageLimit = 12;
+const customerMessageWindowSeconds = 10 * 60;
+
+export class SupportRateLimitError extends Error {
+  constructor(public retryAfterSeconds: number) {
+    super("Support request rate limit exceeded");
+    this.name = "SupportRateLimitError";
+  }
+}
+
 export type SupportTicket = {
   id: string; reference: string; requesterName: string; requesterEmail: string; subject: string;
   category: TicketCategory; priority: TicketPriority; status: TicketStatus; assignedTo: string | null;
@@ -55,11 +67,6 @@ function mapMessage(row: Record<string, unknown>): SupportMessage {
     authorDisplay: String(row.author_display), body: String(row.body), isInternal: Boolean(row.is_internal), createdAt: new Date(String(row.created_at)).toISOString() };
 }
 
-export async function countRecentTickets(ipHash: string) {
-  const result = await database.query("select count(*)::int as count from support.ticket where reporter_ip_hash = $1 and created_at > now() - interval '1 hour'", [ipHash]);
-  return Number(result.rows[0]?.count ?? 0);
-}
-
 export async function createTicket(input: { requesterName: string; requesterEmail: string; subject: string; category: TicketCategory; priority: TicketPriority; body: string; ipHash: string }) {
   const client = await database.connect();
   const token = createAccessToken();
@@ -68,6 +75,14 @@ export async function createTicket(input: { requesterName: string; requesterEmai
   const sla = slaHours[input.priority];
   try {
     await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`support-ticket:${input.ipHash}`]);
+    const recent = await client.query(
+      "select count(*)::int as count from support.ticket where reporter_ip_hash = $1 and created_at > now() - interval '1 hour'",
+      [input.ipHash],
+    );
+    if (Number(recent.rows[0]?.count ?? 0) >= ticketCreationLimit) {
+      throw new SupportRateLimitError(ticketCreationWindowSeconds);
+    }
     const sequence = await client.query("select nextval('support.ticket_reference_seq') as value");
     const reference = `PDX-${new Date().getUTCFullYear()}-${String(sequence.rows[0].value).padStart(6, "0")}`;
     const result = await client.query(`insert into support.ticket
@@ -101,14 +116,29 @@ export async function addCustomerReply(reference: string, token: string, body: s
   const existing = await getPublicTicket(reference, token);
   if (!existing || existing.ticket.status === "closed") return null;
   const client = await database.connect();
+  let committed = false;
   try {
     await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`support-message:${existing.ticket.id}`]);
+    const current = await client.query("select status from support.ticket where id = $1 for update", [existing.ticket.id]);
+    if (!current.rowCount || current.rows[0].status === "closed") {
+      await client.query("rollback");
+      return null;
+    }
+    const recent = await client.query(
+      "select count(*)::int as count from support.message where ticket_id = $1 and author_type = 'customer' and created_at > now() - interval '10 minutes'",
+      [existing.ticket.id],
+    );
+    if (Number(recent.rows[0]?.count ?? 0) >= customerMessageLimit) {
+      throw new SupportRateLimitError(customerMessageWindowSeconds);
+    }
     await client.query("insert into support.message (id,ticket_id,author_type,author_display,body) values ($1,$2,'customer',$3,$4)", [randomUUID(), existing.ticket.id, existing.ticket.requesterName, body]);
     await client.query("update support.ticket set status = case when status = 'waiting_customer' then 'in_progress' else status end, updated_at = now() where id = $1", [existing.ticket.id]);
     await addEvent(client, existing.ticket.id, "customer", null, "message.customer", {});
     await client.query("commit");
-    return getPublicTicket(reference, token);
+    committed = true;
   } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
+  return committed ? getPublicTicket(reference, token) : null;
 }
 
 export async function listTickets(filters: { status?: string; priority?: string; query?: string }) {

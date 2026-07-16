@@ -1,4 +1,5 @@
 import { getAdminSession } from "@/lib/admin-session";
+import { guardAdminMutation } from "@/lib/request-security";
 import { createIncident, getStatus, parseIncidentInput } from "@/lib/status-store";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,13 @@ export async function GET() {
 export async function POST(request: Request) {
   const session = await getAdminSession();
   if (!session) return Response.json({ error: "Forbidden" }, { status: 403 });
+  const guarded = guardAdminMutation(request, {
+    scope: "status.incident.create",
+    subject: session.user.id,
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (guarded) return guarded;
   const input = parseIncidentInput(await request.json().catch(() => null));
   if (!input) return Response.json({ error: "Invalid incident." }, { status: 400 });
   try {

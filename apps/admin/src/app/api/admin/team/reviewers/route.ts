@@ -3,10 +3,14 @@ import { getAdminSession } from "@/lib/admin-session";
 import { auth } from "@/lib/auth";
 import { database } from "@/lib/db";
 import { guardAdminMutation } from "@/lib/request-security";
+import { isSessionRecentlyAuthenticated, recentAuthenticationRequiredResponse } from "@/lib/session-security";
 
 export async function POST(request: Request) {
   const session = await getAdminSession();
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isSessionRecentlyAuthenticated(session.session.createdAt)) {
+    return recentAuthenticationRequiredResponse();
+  }
   const guarded = guardAdminMutation(request, {
     scope: "team.reviewer.create",
     subject: session.user.id,

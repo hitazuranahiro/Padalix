@@ -131,21 +131,80 @@ func NewWorker(db *pgxpool.Pool, stellar *StellarPaymentService, config WorkerCo
 }
 
 func (w *Worker) Run(ctx context.Context) error {
-	if err := w.RunOnce(ctx); err != nil {
-		slog.Error("worker cycle failed", "error", err)
+	startedAt := w.now().UTC()
+	if err := w.recordHeartbeat(ctx, startedAt, startedAt, nil, "starting"); err != nil {
+		return fmt.Errorf("initialize worker heartbeat: %w", err)
 	}
+	w.runCycle(ctx, startedAt)
 	ticker := time.NewTicker(w.config.PollInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if err := w.recordHeartbeat(shutdownCtx, startedAt, w.now().UTC(), nil, "stopped"); err != nil {
+				slog.Error("worker shutdown heartbeat failed", "error", err, "worker_id", w.config.ID)
+			}
 			return nil
 		case <-ticker.C:
-			if err := w.RunOnce(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				slog.Error("worker cycle failed", "error", err)
-			}
+			w.runCycle(ctx, startedAt)
 		}
 	}
+}
+
+func (w *Worker) runCycle(ctx context.Context, workerStartedAt time.Time) {
+	cycleStartedAt := w.now().UTC()
+	cycleErr := w.RunOnce(ctx)
+	status := "ok"
+	if cycleErr != nil && !errors.Is(cycleErr, context.Canceled) {
+		status = "error"
+		slog.Error("worker cycle failed", "error", cycleErr, "worker_id", w.config.ID)
+	}
+	if err := w.recordHeartbeat(ctx, workerStartedAt, cycleStartedAt, cycleErr, status); err != nil && !errors.Is(err, context.Canceled) {
+		slog.Error("worker heartbeat failed", "error", err, "worker_id", w.config.ID)
+	}
+}
+
+func (w *Worker) recordHeartbeat(ctx context.Context, workerStartedAt, cycleStartedAt time.Time, cycleErr error, status string) error {
+	completedAt := w.now().UTC()
+	duration := max(int64(0), completedAt.Sub(cycleStartedAt).Milliseconds())
+	errorCode := ""
+	if cycleErr != nil {
+		errorCode = operationalErrorCode(cycleErr)
+	}
+	_, err := w.db.Exec(ctx, `insert into operations.worker_heartbeat(
+		worker_id,service,started_at,last_seen_at,last_cycle_started_at,last_cycle_completed_at,
+		last_cycle_duration_ms,last_cycle_status,last_error_code,consecutive_errors,cycles_completed,metadata
+	) values($1,'platform-worker',$2,$3,$4,$3,$5,$6,nullif($7,''),case when $6='error' then 1 else 0 end,
+		case when $6 in ('ok','error') then 1 else 0 end,jsonb_build_object('pollIntervalMs',$8::bigint))
+	on conflict(worker_id) do update set service=excluded.service,started_at=excluded.started_at,
+		last_seen_at=excluded.last_seen_at,last_cycle_started_at=excluded.last_cycle_started_at,
+		last_cycle_completed_at=excluded.last_cycle_completed_at,last_cycle_duration_ms=excluded.last_cycle_duration_ms,
+		last_cycle_status=excluded.last_cycle_status,last_error_code=excluded.last_error_code,
+		consecutive_errors=case when excluded.last_cycle_status='error' then operations.worker_heartbeat.consecutive_errors+1 else 0 end,
+		cycles_completed=operations.worker_heartbeat.cycles_completed+case when excluded.last_cycle_status in ('ok','error') then 1 else 0 end,
+		metadata=excluded.metadata`, w.config.ID, workerStartedAt, completedAt, cycleStartedAt, duration, status,
+		errorCode, w.config.PollInterval.Milliseconds())
+	return err
+}
+
+func operationalErrorCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	message := strings.ToLower(err.Error())
+	for _, candidate := range []struct{ fragment, code string }{
+		{"recover platform jobs", "platform_lock_recovery_failed"},
+		{"recover notification jobs", "notification_lock_recovery_failed"},
+		{"recover support notification jobs", "support_lock_recovery_failed"},
+		{"enqueue reconciliation", "reconciliation_enqueue_failed"},
+	} {
+		if strings.Contains(message, candidate.fragment) {
+			return candidate.code
+		}
+	}
+	return "worker_cycle_failed"
 }
 
 func (w *Worker) RunOnce(ctx context.Context) error {

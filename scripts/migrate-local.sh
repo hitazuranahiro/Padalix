@@ -21,6 +21,8 @@ for migration in \
   013_transfer_receipts.sql \
   014_stellar_testnet_payments.sql \
   015_platform_worker_and_ledger.sql \
-  016_kyc_evidence_storage.sql; do
+  016_kyc_evidence_storage.sql \
+  017_compliance_control_plane.sql \
+  018_worker_observability.sql; do
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT_DIR/apps/admin/sql/$migration"
 done

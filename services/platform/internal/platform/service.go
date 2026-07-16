@@ -11,6 +11,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -19,10 +20,11 @@ import (
 )
 
 type Service struct {
-	db                *pgxpool.Pool
-	internalToken     string
-	stellarWalletAuth *StellarWalletAuth
-	stellarPayments   *StellarPaymentService
+	db                 *pgxpool.Pool
+	internalToken      string
+	stellarWalletAuth  *StellarWalletAuth
+	stellarPayments    *StellarPaymentService
+	complianceEnforced bool
 }
 
 type identity struct {
@@ -61,12 +63,17 @@ func NewWithStellarWalletAuth(db *pgxpool.Pool, internalToken string, auth *Stel
 }
 
 func NewWithStellarServices(db *pgxpool.Pool, internalToken string, auth *StellarWalletAuth, payments *StellarPaymentService) *Service {
-	return &Service{db: db, internalToken: internalToken, stellarWalletAuth: auth, stellarPayments: payments}
+	return &Service{
+		db: db, internalToken: internalToken, stellarWalletAuth: auth, stellarPayments: payments,
+		complianceEnforced: strings.EqualFold(strings.TrimSpace(os.Getenv("COMPLIANCE_ENFORCEMENT_ENABLED")), "true"),
+	}
 }
 
 func (s *Service) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
+	mux.HandleFunc("GET /health/worker", s.workerHealth)
+	mux.HandleFunc("GET /internal/operations/metrics", s.operationalMetrics)
 	mux.Handle("GET /v1/account", s.authenticate(http.HandlerFunc(s.getAccount)))
 	mux.Handle("GET /v1/dashboard", s.authenticate(http.HandlerFunc(s.getDashboard)))
 	mux.Handle("GET /v1/payment-methods", s.authenticate(http.HandlerFunc(s.listPaymentMethods)))
@@ -388,6 +395,19 @@ func (s *Service) createTransfer(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil || quoteStatus != "active" || time.Now().After(expiresAt) {
 		writeError(w, http.StatusConflict, "quote is no longer active")
+		return
+	}
+	complianceDecision, err := s.assessTransferCompliance(r.Context(), tx, acct, acct.ID+":"+idem, sourceAmount)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "compliance controls unavailable")
+		return
+	}
+	if s.complianceEnforced && !complianceDecision.Allowed {
+		if err := tx.Commit(r.Context()); err != nil {
+			writeError(w, http.StatusInternalServerError, "compliance review could not be recorded")
+			return
+		}
+		writeError(w, http.StatusForbidden, "transfer requires compliance review")
 		return
 	}
 	var balance string

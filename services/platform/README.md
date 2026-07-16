@@ -9,6 +9,12 @@ pnpm dev:platform
 
 Local health endpoint: `http://127.0.0.1:8080/health`
 
+Worker liveness is available at `GET /health/worker`. It returns `503` when no
+worker has registered, the latest heartbeat is more than 60 seconds old, or the
+last completed cycle failed. `GET /internal/operations/metrics` requires the
+platform bearer token and reports worker cycle health plus per-outbox counts
+and oldest-item age for alerting and dashboards.
+
 Run the durable worker in a second process after applying all migrations:
 
 ```bash
@@ -136,6 +142,12 @@ double-entry postings for the payment and network fee, member activity, and an
 idempotent notification. Failed transactions are also reconciled and notified.
 Jobs that exhaust retries enter `dead_letter` and create an operator-visible
 `platform.reconciliation_exception` row.
+
+Migration `018_worker_observability.sql` adds a durable heartbeat lease. Each
+cycle records freshness, bounded error codes, duration, consecutive errors, and
+the cumulative cycle count. The public worker probe contains no queue or
+payment data; detailed metrics are restricted to service-authenticated callers.
+Use a stable, unique `WORKER_ID` for each persistent worker replica.
 
 Email delivery is fail-closed and remains paused by default. Amazon SES is the
 production provider. The worker uses the AWS credential chain and SESv2 API,

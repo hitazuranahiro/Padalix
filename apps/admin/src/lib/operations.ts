@@ -34,15 +34,36 @@ export type ReconciliationException = {
   createdAt: string;
 };
 
+export type WorkerRuntime = {
+  id: string;
+  service: string;
+  lastSeenAt: string;
+  lastCycleStatus: string;
+  lastErrorCode: string;
+  consecutiveErrors: number;
+  cyclesCompleted: number;
+  heartbeatAgeSeconds: number;
+  healthy: boolean;
+};
+
+export type QueueHealth = {
+  pending: number;
+  processing: number;
+  failed: number;
+  oldestPendingSeconds: number;
+};
+
 export type OperationsSnapshot = {
   transfers: OperationsTransfer[];
   jobs: OperationsJob[];
   exceptions: ReconciliationException[];
+  workers: WorkerRuntime[];
+  queue: QueueHealth;
   generatedAt: string;
 };
 
 export async function getOperationsSnapshot(): Promise<OperationsSnapshot> {
-  const [transfers, jobs, exceptions] = await Promise.all([
+  const [transfers, jobs, exceptions, workers, queue] = await Promise.all([
     database.query<OperationsTransfer>(`select t.reference,t.status,t.settlement_mode as "settlementMode",
       t.recipient_name as "recipientName",t.source_asset as "sourceAsset",t.source_amount::text as "sourceAmount",
       coalesce(i.transaction_hash,'') as "transactionHash",coalesce(i.reconciliation_status,'not_applicable') as "reconciliationStatus",
@@ -59,8 +80,30 @@ export async function getOperationsSnapshot(): Promise<OperationsSnapshot> {
       from platform.reconciliation_exception e join platform.transfer t on t.id=e.transfer_id
       join platform.stellar_payment_intent i on i.id=e.payment_intent_id
       order by case e.status when 'open' then 0 when 'investigating' then 1 else 2 end,e.created_at desc limit 100`),
+    database.query<WorkerRuntime>(`select worker_id as id,service,last_seen_at::text as "lastSeenAt",
+      last_cycle_status as "lastCycleStatus",coalesce(last_error_code,'') as "lastErrorCode",
+      consecutive_errors as "consecutiveErrors",cycles_completed::integer as "cyclesCompleted",
+      greatest(0,extract(epoch from now()-last_seen_at))::integer as "heartbeatAgeSeconds",
+      (last_seen_at >= now()-interval '60 seconds' and last_cycle_status not in ('error','stopped')) as healthy
+      from operations.worker_heartbeat order by last_seen_at desc limit 10`),
+    database.query<QueueHealth>(`with queue as (
+      select status,created_at from platform.outbox_job
+      union all select status,created_at from notification.outbox
+      union all select status,created_at from support.notification_outbox
+    ) select count(*) filter(where status='pending')::integer as pending,
+      count(*) filter(where status='processing')::integer as processing,
+      count(*) filter(where status in ('failed','dead_letter'))::integer as failed,
+      coalesce(greatest(0,extract(epoch from now()-min(created_at) filter(where status='pending'))),0)::integer as "oldestPendingSeconds"
+      from queue`),
   ]);
-  return { transfers: transfers.rows, jobs: jobs.rows, exceptions: exceptions.rows, generatedAt: new Date().toISOString() };
+  return {
+    transfers: transfers.rows,
+    jobs: jobs.rows,
+    exceptions: exceptions.rows,
+    workers: workers.rows,
+    queue: queue.rows[0] ?? { pending: 0, processing: 0, failed: 0, oldestPendingSeconds: 0 },
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 export async function retryOperationsJob(id: string, actorId: string) {

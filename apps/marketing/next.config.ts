@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
 
+const mediaURL = process.env.NEXT_PUBLIC_MEDIA_CDN_ENABLED === "true"
+  ? process.env.NEXT_PUBLIC_MEDIA_URL?.trim().replace(/\/+$/, "")
+  : undefined;
+const mediaOrigin = mediaURL ? new URL(mediaURL).origin : "";
+
 const scriptSources = process.env.NODE_ENV === "development"
   ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
   : "script-src 'self' 'unsafe-inline'";
@@ -19,14 +24,17 @@ const contentSecurityPolicy = [
   "font-src 'self' data:",
   "img-src 'self' data: blob: https:",
   connectSources,
-  "frame-src 'self'",
-  "media-src 'self' blob:",
+  `frame-src 'self'${mediaOrigin ? ` ${mediaOrigin}` : ""}`,
+  `media-src 'self' blob:${mediaOrigin ? ` ${mediaOrigin}` : ""}`,
   "worker-src 'self' blob:",
 ].join("; ");
 
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  images: {
+    remotePatterns: mediaURL ? [new URL("/**", `${mediaURL}/`)] : [],
+  },
   async headers() {
     return [
       {

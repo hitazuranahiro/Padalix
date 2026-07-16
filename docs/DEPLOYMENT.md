@@ -227,6 +227,12 @@ mailbox-simulator smoke test and one controlled real-recipient test pass.
 
 Give the API permission to create narrowly scoped signed URLs, not to administer buckets. Give the worker only the object-read and quarantine/delete permissions its jobs require. Store cloud credentials, vendor secrets, JWT signing material, database passwords, and email API keys in the runtime secret manager. Rotate independently and document owners and expiry dates.
 
+Public marketing media uses the separate `padalix-media` R2 bucket. Configure
+`NEXT_PUBLIC_MEDIA_URL=https://cdn.padalix.com` in marketing and the server-only
+`MEDIA_S3_*` plus `MEDIA_PUBLIC_URL` variables in admin. Bootstrap the existing
+assets before setting `NEXT_PUBLIC_MEDIA_CDN_ENABLED=true` by following
+`PUBLIC_MEDIA_STORAGE.md`.
+
 ## 6. CORS, Cookies, and Proxy Rules
 
 Prefer same-origin proxying over CORS for authenticated customer and admin APIs. If direct cross-origin calls are temporarily unavoidable:

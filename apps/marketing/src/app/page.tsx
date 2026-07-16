@@ -14,6 +14,7 @@ import { Brand } from "@/components/brand";
 import { SiteHeader } from "@/components/site-header";
 import { pageMetadata } from "@/lib/metadata";
 import { loadSiteContent } from "@/lib/site-content";
+import { mediaUrl } from "@/lib/media";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.padalix.com";
 
@@ -46,7 +47,7 @@ export default async function MarketingPage() {
         <section className="hero" id="top" aria-labelledby="hero-title">
           <Image
             className="hero-image"
-            src="/images/padalix-airport-hero.png"
+            src={mediaUrl("images/padalix-airport-hero.png")}
             alt="Filipino professional using Padalix while traveling internationally"
             fill
             priority

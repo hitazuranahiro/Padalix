@@ -48,6 +48,6 @@ Machine assessments are stored with provider, model, policy versions, normalized
 
 ## Service status
 
-The administrator status console is available at `/status`. Migration `010_status_system.sql` creates the component, observed-check, incident, incident-update, and incident-component records. Configure a unique `CRON_SECRET`; the Vercel cron invokes `/api/cron/status` every five minutes and the same checks can be started manually by an administrator.
+The administrator status console is available at `/status`. Migration `010_status_system.sql` creates the component, observed-check, incident, incident-update, and incident-component records. Configure a unique `CRON_SECRET`; the Vercel Pro cron invokes `/api/cron/status` every minute and the same checks can be started manually by an administrator.
 
 Automatic notices open only after three consecutive failures and resolve after two consecutive successes. All automatic and manual incident changes are recorded in `audit.admin_event`. The public `/api/status` response includes only published incidents and public components. Observed percentages are derived from stored checks and are not an SLA.

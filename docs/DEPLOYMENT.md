@@ -176,7 +176,7 @@ CRON_SECRET=<independent-status-monitor-secret>
 
 Use the managed PostgreSQL pooler for Vercel functions and cap pool size appropriately. Replace the shared `KYC_INGEST_SECRET` with short-lived service identity or signed requests when the Go API owns KYC ingestion.
 
-`CRON_SECRET` protects the five-minute `/api/cron/status` probe. Vercel sends it as a bearer token for scheduled invocations. The status monitor accepts only HTTPS targets on `padalix.com` subdomains, uses an advisory lock to prevent overlapping runs, opens a public incident after three consecutive failures, and resolves only after two consecutive successful checks. `STATUS_API_URL` is server-only in marketing; the incident banner is streamed so a slow or unavailable status feed never delays the page body.
+`CRON_SECRET` protects the one-minute `/api/cron/status` probe. Vercel sends it as a bearer token for scheduled invocations. The status monitor accepts only HTTPS targets on `padalix.com` subdomains, uses an advisory lock to prevent overlapping runs, opens a public incident after three consecutive failures, and resolves only after two consecutive successful checks. This schedule requires Vercel Pro or Enterprise. `STATUS_API_URL` is server-only in marketing; the incident banner is streamed so a slow or unavailable status feed never delays the page body.
 
 ### Standalone auth service
 

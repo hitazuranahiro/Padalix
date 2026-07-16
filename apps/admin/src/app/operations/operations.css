@@ -36,3 +36,14 @@
 @media(max-width:1280px){.operations-metrics{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:1150px){.operations-console{grid-template-columns:1fr}.operations-queue{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--black);border-left:0}}
 @media(max-width:760px){.operations-summary{padding:30px 15px 55px}.operations-summary>header{align-items:start;flex-direction:column}.operations-summary h1{font-size:2rem}.operations-metrics{grid-template-columns:1fr 1fr}.operations-metrics article{padding:14px}.operations-table{overflow:auto}.operations-table>header,.operations-table>article{min-width:830px}.operations-queue{display:block}.operations-queue>section{padding:30px 16px}}
+
+.operations-summary h1,.operations-queue h2{text-wrap:balance}
+.operations-summary>header>span,.operations-metrics strong,.operations-table,.operations-worker strong,.operations-worker small,.operations-job small{font-variant-numeric:tabular-nums}
+.operations-table>article{transition-property:background-color,color;transition-duration:140ms;transition-timing-function:ease-out}
+.operations-exception,.operations-job,.operations-worker{border:0;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 10px 30px rgba(0,0,0,.18)}
+.operations-exception textarea{transition-property:border-color,box-shadow;transition-duration:150ms;transition-timing-function:ease-out}
+.operations-exception textarea:focus{border-color:var(--signal);box-shadow:0 0 0 1px rgba(55,242,127,.22)}
+.operations-exception button,.operations-job button{min-height:44px;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 5px 16px rgba(0,0,0,.16);transition-property:transform,background-color,box-shadow,opacity;transition-duration:160ms;transition-timing-function:cubic-bezier(.2,0,0,1)}
+@media(hover:hover){.operations-table>article:hover{background:rgba(0,0,0,.035)}.operations-exception button:hover,.operations-job button:hover{box-shadow:0 0 0 1px rgba(255,255,255,.16),0 8px 22px rgba(0,0,0,.22);transform:translateY(-1px)}}
+.operations-exception button:active,.operations-job button:active{transform:scale(.96)}
+@media(prefers-reduced-motion:reduce){.operations-table>article,.operations-exception textarea,.operations-exception button,.operations-job button{transition-duration:.01ms!important;transform:none!important}}

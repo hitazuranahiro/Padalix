@@ -30,3 +30,8 @@ The future customer PWA should use its own Vercel project and the `app.padalix.c
 ## Content
 
 Landing-page content currently lives in `src/content/site.ts`. The presentation components consume this typed model so the source can later be replaced with the Padalix Go content API without restructuring the page.
+
+Public images and documents resolve through `NEXT_PUBLIC_MEDIA_URL` only when
+`NEXT_PUBLIC_MEDIA_CDN_ENABLED=true`. Keep the flag disabled until the initial
+`padalix-media` R2 sync described in `../../docs/PUBLIC_MEDIA_STORAGE.md` has
+completed; otherwise the bundled `public/` assets remain the fallback.

@@ -37,6 +37,11 @@ export const auth = betterAuth({
     window: 60,
     max: 20,
   },
+  session: {
+    expiresIn: 60 * 60 * 12,
+    updateAge: 60 * 60,
+    freshAge: 60 * 5,
+  },
   plugins: [
     admin({
       adminRoles: ["admin"],

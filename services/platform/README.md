@@ -9,6 +9,19 @@ pnpm dev:platform
 
 Local health endpoint: `http://127.0.0.1:8080/health`
 
+Worker liveness is available at `GET /health/worker`. It returns `503` when no
+worker has registered, the latest heartbeat is more than 60 seconds old, or the
+last completed cycle failed. `GET /internal/operations/metrics` requires the
+platform bearer token and reports worker cycle health plus per-outbox counts
+and oldest-item age for alerting and dashboards.
+
+Run the durable worker in a second process after applying all migrations:
+
+```bash
+cd services/platform
+go run ./cmd/worker
+```
+
 For a standalone Vercel container project, select `services/platform` as the
 root directory. `Dockerfile.vercel` builds the service and the runtime-provided
 `PORT` is used automatically. Configure `DATABASE_URL` and
@@ -113,3 +126,54 @@ member, a verified testnet wallet, a funded destination, and an idempotency key.
 A licensed payout integration, asynchronous settlement worker, signed webhook
 processing, treasury controls, and reconciliation remain production mainnet
 requirements.
+
+## Worker and Reconciliation
+
+Migration `015_platform_worker_and_ledger.sql` adds leased outbox processing,
+bounded exponential retries, stale-lock recovery, dead-letter reconciliation
+exceptions, notification provider IDs, and Stellar testnet ledger state. The
+API submits the customer-signed envelope directly from request memory and then
+atomically records the submitted state and reconciliation job. The signed XDR
+is never stored. The worker can recreate missing reconciliation jobs from the
+submitted intent, so API or worker restarts do not depend on browser polling.
+
+On chain success, one database transaction records receipt evidence, balanced
+double-entry postings for the payment and network fee, member activity, and an
+idempotent notification. Failed transactions are also reconciled and notified.
+Jobs that exhaust retries enter `dead_letter` and create an operator-visible
+`platform.reconciliation_exception` row.
+
+Migration `018_worker_observability.sql` adds a durable heartbeat lease. Each
+cycle records freshness, bounded error codes, duration, consecutive errors, and
+the cumulative cycle count. The public worker probe contains no queue or
+payment data; detailed metrics are restricted to service-authenticated callers.
+Use a stable, unique `WORKER_ID` for each persistent worker replica.
+
+Email delivery is fail-closed and remains paused by default. Amazon SES is the
+production provider. The worker uses the AWS credential chain and SESv2 API,
+stores the returned message ID, and attaches a hashed idempotency tag:
+
+```dotenv
+WORKER_ID=padalix-worker-1
+WORKER_POLL_INTERVAL=2s
+WORKER_LOCK_TIMEOUT=2m
+EMAIL_DELIVERY_ENABLED=false
+EMAIL_PROVIDER=ses
+EMAIL_FROM=Padalix <notifications@padalix.com>
+AWS_REGION=ap-southeast-1
+AWS_ACCESS_KEY_ID=<ses-send-only-access-key>
+AWS_SECRET_ACCESS_KEY=<ses-send-only-secret-key>
+EMAIL_SES_CONFIGURATION_SET=<optional-ses-configuration-set>
+```
+
+`EMAIL_PROVIDER=webhook` remains available for a custom HTTPS provider. It
+requires `EMAIL_PROVIDER_URL` and `EMAIL_PROVIDER_TOKEN`; the endpoint must
+honor `Idempotency-Key` and return `{"id":"provider-message-id"}`.
+
+The same delivery loop processes `notification.outbox` (including security
+messages with a null `member_id`) and `support.notification_outbox`. Optional
+product mail is suppressed unless the member preference explicitly opts in.
+
+Build the persistent worker container with `Dockerfile.worker`. It exposes no
+HTTP port and should run as a private Easypanel App service with one replica
+initially and automatic restart enabled.

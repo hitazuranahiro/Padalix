@@ -1,14 +1,17 @@
-import { NextResponse } from "next/server";
-import { countRecentTickets, createTicket, hashReporterIp, ticketCategories, ticketPriorities, type TicketCategory, type TicketPriority } from "@/lib/support";
-import { clientIp, supportCors, supportJson } from "@/lib/support-http";
+import { createTicket, hashReporterIp, SupportRateLimitError, ticketCategories, ticketPriorities, type TicketCategory, type TicketPriority } from "@/lib/support";
+import { clientIp, guardSupportOrigin, guardSupportRateLimit, supportJson, supportPreflight } from "@/lib/support-http";
 
 export const runtime = "nodejs";
 
 function text(value: unknown, max: number) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
 
-export function OPTIONS(request: Request) { return new NextResponse(null, { status: 204, headers: supportCors(request) }); }
+export function OPTIONS(request: Request) { return supportPreflight(request); }
 
 export async function POST(request: Request) {
+  const originGuard = guardSupportOrigin(request);
+  if (originGuard) return originGuard;
+  const rateGuard = guardSupportRateLimit(request, "support.ticket.create", 20, 3_600_000);
+  if (rateGuard) return rateGuard;
   try {
     const body = await request.json();
     if (text(body.website, 200)) return supportJson(request, { ok: true }, { status: 202 });
@@ -22,10 +25,15 @@ export async function POST(request: Request) {
       return supportJson(request, { error: "Check the required fields and provide at least 20 characters of detail." }, { status: 400 });
     }
     const ipHash = hashReporterIp(clientIp(request));
-    if (await countRecentTickets(ipHash) >= 5) return supportJson(request, { error: "Ticket limit reached. Try again later or reply to an existing ticket." }, { status: 429 });
     const created = await createTicket({ requesterName, requesterEmail, subject, category, priority, body: message, ipHash });
     return supportJson(request, { reference: created.ticket.reference, token: created.token, trackingPath: `/help/ticket/${created.ticket.reference}?token=${created.token}` }, { status: 201 });
   } catch (error) {
+    if (error instanceof SupportRateLimitError) {
+      return supportJson(request, { error: "Ticket limit reached. Try again later or reply to an existing ticket." }, {
+        status: 429,
+        headers: { "Retry-After": String(error.retryAfterSeconds) },
+      });
+    }
     console.error("Support ticket creation failed", error);
     return supportJson(request, { error: "The support desk could not create this ticket." }, { status: 500 });
   }

@@ -185,7 +185,7 @@ The current back-office implementation proves the compliance workflow in the adm
 
 The worker consumes jobs from the PostgreSQL outbox and performs retryable side effects:
 
-- Submit signed Stellar transactions.
+- Persist submission outcomes and reconcile submitted Stellar transactions.
 - Poll transaction results and reconcile status.
 - Expire quotes and claim codes.
 - Send transactional email.
@@ -193,6 +193,12 @@ The worker consumes jobs from the PostgreSQL outbox and performs retryable side 
 - Raise records that require manual intervention.
 
 Every job must have an idempotency key, bounded retry count, exponential backoff, and a terminal failure state. The API must never report a transfer as complete only because a job was accepted.
+
+For the non-custodial wallet flow, customer-signed XDR is never persisted. The
+API validates and submits it from request memory, then commits the submitted
+state and durable reconciliation job atomically. An ambiguous RPC response is
+retried by the customer with the same signed transaction; once RPC accepts it,
+the worker owns restart-safe reconciliation, ledger posting, and notification.
 
 ### 5.6 Soroban Contracts
 

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { DM_Mono, Manrope } from "next/font/google";
 import { StatusBanner } from "@/components/status-banner";
 import { loadPublicStatus } from "@/lib/status";
+import { mediaUrl } from "@/lib/media";
 import "./globals.css";
 import "./status.css";
 
@@ -47,13 +48,13 @@ export const metadata: Metadata = {
     type: "website",
     url: "https://padalix.com",
     locale: "en_US",
-    images: [{ url: "/images/padalix-og.png", width: 1200, height: 630, type: "image/png", alt: "Padalix global payment infrastructure" }]
+    images: [{ url: mediaUrl("images/padalix-og.png"), width: 1200, height: 630, type: "image/png", alt: "Padalix global payment infrastructure" }]
   },
   twitter: {
     card: "summary_large_image",
     title: "Padalix | Money Moves Forward",
     description: "Clearer cross-border payments built for global movement.",
-    images: ["/images/padalix-og.png"]
+    images: [mediaUrl("images/padalix-og.png")]
   }
 };
 

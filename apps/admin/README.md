@@ -44,7 +44,7 @@ The KYC desk is available at `/kyc`. Administrators can provision a `compliance_
 
 KYC member and staff notifications are written to `notification.outbox`. Configure `KYC_REVIEW_EMAIL` for the compliance queue. Email delivery still requires the Go worker and selected email provider described in the architecture plan.
 
-Machine assessments are stored with provider, model, policy versions, normalized scores, reason codes, and recommendation. `KYC_AUTO_APPROVAL_ENABLED` defaults to `false`. Enable it only after country/document policies, screening, model validation, monitoring, and an operational kill switch have passed the production readiness gate. Automation can approve a low-risk case but never reject a member; adverse or uncertain results require human review.
+Machine assessments are stored with provider, model, policy versions, normalized scores, reason codes, and recommendation. Automatic approval is disabled in application code: recommendations always enter the reviewer queue and only an authorized reviewer can approve a member. Evidence storage and reviewer-access controls are documented in `docs/KYC_EVIDENCE_STORAGE.md`.
 
 ## Service status
 

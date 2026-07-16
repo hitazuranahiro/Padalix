@@ -1,4 +1,5 @@
 import { getAdminSession } from "@/lib/admin-session";
+import { guardAdminMutation } from "@/lib/request-security";
 import { getAdminTicket, ticketPriorities, ticketStatuses, updateTicket, type TicketPriority, type TicketStatus } from "@/lib/support";
 
 export async function GET(_: Request, context: { params: Promise<{ reference: string }> }) {
@@ -9,6 +10,8 @@ export async function GET(_: Request, context: { params: Promise<{ reference: st
 
 export async function PATCH(request: Request, context: { params: Promise<{ reference: string }> }) {
   const session = await getAdminSession(); if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const guarded = guardAdminMutation(request, { scope: "support.ticket.update", subject: session.user.id, limit: 60, windowMs: 60_000 });
+  if (guarded) return guarded;
   const body = await request.json().catch(() => ({}));
   const status = ticketStatuses.includes(body.status as TicketStatus) ? body.status as TicketStatus : undefined;
   const priority = ticketPriorities.includes(body.priority as TicketPriority) ? body.priority as TicketPriority : undefined;

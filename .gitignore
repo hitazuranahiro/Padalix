@@ -17,3 +17,5 @@ Photos/
 /cms.js
 /content/
 /assets/
+.vercel
+.env*

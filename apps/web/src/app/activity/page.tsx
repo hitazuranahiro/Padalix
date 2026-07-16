@@ -24,9 +24,9 @@ export default async function Activity() {
 
   return (
     <AppShell active="/activity" member={{ name: account.name, level: account.verificationLevel }}>
-      <main className="flow-page">
+      <main className="flow-page workspace-flow-page">
         <header className={styles.header}>
-          <div><p>ACTIVITY / LEDGER</p><h1>Your transfer history.</h1></div>
+          <div><p>ACCOUNT LEDGER</p><h1>Activity</h1><span>Review transfers, account events, and downloadable records.</span></div>
           <div className={styles.exports}>
             <a href="/api/platform/exports/transfers?format=json"><FileJson size={16} /> JSON</a>
             <a href="/api/platform/exports/transfers?format=csv"><Download size={16} /> CSV</a>

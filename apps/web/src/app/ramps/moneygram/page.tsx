@@ -36,8 +36,8 @@ export default async function MoneyGramRampPage() {
       <main className={styles.page}>
         <header className={styles.hero}>
           <div>
-            <p>MONEYGRAM RAMPS / SEP-24</p>
-            <h1>Cash access, without custody.</h1>
+            <p>MONEYGRAM / SEP-24</p>
+            <h1>MoneyGram cash access</h1>
             <span>Padalix connects a user-controlled Stellar wallet to MoneyGram&apos;s hosted cash-in and cash-out flow.</span>
           </div>
           <aside data-ready={integrationReady}>

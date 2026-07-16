@@ -25,8 +25,8 @@ export default async function WalletPage() {
       <main className={styles.page}>
         <header className={styles.hero}>
           <div>
-            <p>STELLAR WALLET / NON-CUSTODIAL</p>
-            <h1>Prove ownership. Keep custody.</h1>
+            <p>STELLAR WALLET</p>
+            <h1>Connect your wallet</h1>
             <span>Your wallet signs locally. Padalix records a verified public address, never your private key.</span>
           </div>
           <aside className={mainnet ? styles.mainnetBadge : styles.testnetBadge}>

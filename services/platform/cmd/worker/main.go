@@ -44,8 +44,13 @@ func main() {
 		slog.Error("database unavailable", "error", err)
 		os.Exit(1)
 	}
+	worker, err := platform.NewWorker(pool, stellar, config)
+	if err != nil {
+		slog.Error("email provider unavailable", "error", err)
+		os.Exit(1)
+	}
 	slog.Info("Padalix worker ready", "worker_id", config.ID)
-	if err := platform.NewWorker(pool, stellar, config).Run(ctx); err != nil {
+	if err := worker.Run(ctx); err != nil {
 		slog.Error("worker stopped", "error", err)
 		os.Exit(1)
 	}

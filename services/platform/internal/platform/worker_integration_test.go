@@ -161,7 +161,10 @@ func TestWorkerReconcilesSubmittedPaymentEndToEnd(t *testing.T) {
 	}
 
 	stellar := &StellarPaymentService{config: testStellarPaymentConfig(), network: successfulStellarNetwork{}}
-	worker := NewWorker(db, stellar, WorkerConfig{ID: "integration-worker", PollInterval: time.Second, LockTimeout: time.Minute})
+	worker, err := NewWorker(db, stellar, WorkerConfig{ID: "integration-worker", PollInterval: time.Second, LockTimeout: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := worker.RunOnce(ctx); err != nil {
 		t.Fatal(err)
 	}

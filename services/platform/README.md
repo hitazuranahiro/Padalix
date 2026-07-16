@@ -137,20 +137,31 @@ idempotent notification. Failed transactions are also reconciled and notified.
 Jobs that exhaust retries enter `dead_letter` and create an operator-visible
 `platform.reconciliation_exception` row.
 
-Email delivery is fail-closed and remains paused by default. When enabled, the
-provider endpoint must accept the JSON template contract, honor the
-`Idempotency-Key` header, and return `{"id":"provider-message-id"}`:
+Email delivery is fail-closed and remains paused by default. Amazon SES is the
+production provider. The worker uses the AWS credential chain and SESv2 API,
+stores the returned message ID, and attaches a hashed idempotency tag:
 
 ```dotenv
 WORKER_ID=padalix-worker-1
 WORKER_POLL_INTERVAL=2s
 WORKER_LOCK_TIMEOUT=2m
 EMAIL_DELIVERY_ENABLED=false
-EMAIL_PROVIDER_URL=https://email-provider.example/v1/send
-EMAIL_PROVIDER_TOKEN=<server-only-provider-token>
-EMAIL_FROM=notifications@padalix.com
+EMAIL_PROVIDER=ses
+EMAIL_FROM=Padalix <notifications@padalix.com>
+AWS_REGION=ap-southeast-1
+AWS_ACCESS_KEY_ID=<ses-send-only-access-key>
+AWS_SECRET_ACCESS_KEY=<ses-send-only-secret-key>
+EMAIL_SES_CONFIGURATION_SET=<optional-ses-configuration-set>
 ```
+
+`EMAIL_PROVIDER=webhook` remains available for a custom HTTPS provider. It
+requires `EMAIL_PROVIDER_URL` and `EMAIL_PROVIDER_TOKEN`; the endpoint must
+honor `Idempotency-Key` and return `{"id":"provider-message-id"}`.
 
 The same delivery loop processes `notification.outbox` (including security
 messages with a null `member_id`) and `support.notification_outbox`. Optional
 product mail is suppressed unless the member preference explicitly opts in.
+
+Build the persistent worker container with `Dockerfile.worker`. It exposes no
+HTTP port and should run as a private Easypanel App service with one replica
+initially and automatic restart enabled.

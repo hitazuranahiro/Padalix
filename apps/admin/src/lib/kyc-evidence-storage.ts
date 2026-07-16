@@ -18,6 +18,7 @@ type StorageConfig = {
   forcePathStyle: boolean;
   accessKeyId: string;
   secretAccessKey: string;
+  encryption: "provider" | "AES256" | "aws:kms";
   kmsKeyId?: string;
 };
 
@@ -31,6 +32,15 @@ function storageConfig(): StorageConfig {
   if (!bucket || !region || !accessKeyId || !secretAccessKey) {
     throw new Error("KYC evidence storage is not configured.");
   }
+  const kmsKeyId = process.env.KYC_EVIDENCE_S3_KMS_KEY_ID?.trim() || undefined;
+  const configuredEncryption = process.env.KYC_EVIDENCE_S3_ENCRYPTION?.trim();
+  const encryption = configuredEncryption || (kmsKeyId ? "aws:kms" : "AES256");
+  if (!(["provider", "AES256", "aws:kms"] as const).includes(encryption as "provider" | "AES256" | "aws:kms")) {
+    throw new Error("KYC_EVIDENCE_S3_ENCRYPTION must be provider, AES256, or aws:kms.");
+  }
+  if (encryption === "aws:kms" && !kmsKeyId) {
+    throw new Error("KYC_EVIDENCE_S3_KMS_KEY_ID is required for aws:kms encryption.");
+  }
   return {
     bucket,
     region,
@@ -38,7 +48,8 @@ function storageConfig(): StorageConfig {
     secretAccessKey,
     endpoint: process.env.KYC_EVIDENCE_S3_ENDPOINT?.trim() || undefined,
     forcePathStyle: process.env.KYC_EVIDENCE_S3_FORCE_PATH_STYLE === "true",
-    kmsKeyId: process.env.KYC_EVIDENCE_S3_KMS_KEY_ID?.trim() || undefined,
+    encryption: encryption as StorageConfig["encryption"],
+    kmsKeyId,
   };
 }
 
@@ -72,10 +83,13 @@ export async function createEvidenceUpload(input: {
     Key: input.key,
     ContentType: input.mimeType,
     ContentLength: input.sizeBytes,
-    ChecksumSHA256: checksum,
+    ChecksumSHA256:
+      config.encryption === "provider" ? undefined : checksum,
     Metadata: { "padalix-sha256": input.checksumSha256 },
-    ServerSideEncryption: config.kmsKeyId ? "aws:kms" : "AES256",
-    SSEKMSKeyId: config.kmsKeyId,
+    ServerSideEncryption:
+      config.encryption === "provider" ? undefined : config.encryption,
+    SSEKMSKeyId:
+      config.encryption === "aws:kms" ? config.kmsKeyId : undefined,
   });
   return {
     bucket: config.bucket,
@@ -84,10 +98,14 @@ export async function createEvidenceUpload(input: {
     }),
     headers: {
       "content-type": input.mimeType,
-      "x-amz-checksum-sha256": checksum,
+      ...(config.encryption !== "provider"
+        ? { "x-amz-checksum-sha256": checksum }
+        : {}),
       "x-amz-meta-padalix-sha256": input.checksumSha256,
-      "x-amz-server-side-encryption": config.kmsKeyId ? "aws:kms" : "AES256",
-      ...(config.kmsKeyId
+      ...(config.encryption !== "provider"
+        ? { "x-amz-server-side-encryption": config.encryption }
+        : {}),
+      ...(config.encryption === "aws:kms" && config.kmsKeyId
         ? { "x-amz-server-side-encryption-aws-kms-key-id": config.kmsKeyId }
         : {}),
     },
@@ -103,12 +121,29 @@ export async function inspectEvidenceObject(key: string) {
       ChecksumMode: "ENABLED",
     }),
   );
+  let storageChecksumSha256 = result.ChecksumSHA256;
+  if (config.encryption === "provider") {
+    if (!result.ContentLength || result.ContentLength > 10 * 1024 * 1024) {
+      throw new Error("Stored evidence size is outside the verification limit.");
+    }
+    const object = await client(config).send(
+      new GetObjectCommand({ Bucket: config.bucket, Key: key }),
+    );
+    if (!object.Body) throw new Error("Stored evidence body is unavailable.");
+    const bytes = await object.Body.transformToByteArray();
+    if (bytes.byteLength !== result.ContentLength) {
+      throw new Error("Stored evidence size changed during verification.");
+    }
+    storageChecksumSha256 = createHash("sha256")
+      .update(bytes)
+      .digest("base64");
+  }
   return {
     bucket: config.bucket,
     sizeBytes: result.ContentLength,
     mimeType: result.ContentType,
     checksumSha256: result.Metadata?.["padalix-sha256"],
-    storageChecksumSha256: result.ChecksumSHA256,
+    storageChecksumSha256,
     etag: result.ETag?.replaceAll('"', ""),
   };
 }

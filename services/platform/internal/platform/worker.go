@@ -1,12 +1,10 @@
 package platform
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -22,21 +20,26 @@ import (
 const stellarReconcileTopic = "stellar.reconcile"
 
 type WorkerConfig struct {
-	ID                   string
-	PollInterval         time.Duration
-	LockTimeout          time.Duration
-	EmailDeliveryEnabled bool
-	EmailProviderURL     string
-	EmailProviderToken   string
-	EmailFrom            string
+	ID                    string
+	PollInterval          time.Duration
+	LockTimeout           time.Duration
+	EmailDeliveryEnabled  bool
+	EmailProvider         string
+	EmailProviderURL      string
+	EmailProviderToken    string
+	EmailFrom             string
+	EmailAWSRegion        string
+	EmailConfigurationSet string
 }
 
 type Worker struct {
-	db      *pgxpool.Pool
-	stellar *StellarPaymentService
-	config  WorkerConfig
-	http    *http.Client
-	now     func() time.Time
+	db           *pgxpool.Pool
+	stellar      *StellarPaymentService
+	config       WorkerConfig
+	http         *http.Client
+	email        emailSender
+	emailInitErr error
+	now          func() time.Time
 }
 
 type outboxJob struct {
@@ -68,25 +71,37 @@ func WorkerConfigFromEnv() (WorkerConfig, error) {
 		return WorkerConfig{}, err
 	}
 	config := WorkerConfig{
-		ID:                   envValue("WORKER_ID", "worker-"+newID()),
-		PollInterval:         poll,
-		LockTimeout:          lockTimeout,
-		EmailDeliveryEnabled: strings.EqualFold(strings.TrimSpace(os.Getenv("EMAIL_DELIVERY_ENABLED")), "true"),
-		EmailProviderURL:     strings.TrimSpace(os.Getenv("EMAIL_PROVIDER_URL")),
-		EmailProviderToken:   strings.TrimSpace(os.Getenv("EMAIL_PROVIDER_TOKEN")),
-		EmailFrom:            strings.TrimSpace(os.Getenv("EMAIL_FROM")),
+		ID:                    envValue("WORKER_ID", "worker-"+newID()),
+		PollInterval:          poll,
+		LockTimeout:           lockTimeout,
+		EmailDeliveryEnabled:  strings.EqualFold(strings.TrimSpace(os.Getenv("EMAIL_DELIVERY_ENABLED")), "true"),
+		EmailProvider:         strings.ToLower(envValue("EMAIL_PROVIDER", "webhook")),
+		EmailProviderURL:      strings.TrimSpace(os.Getenv("EMAIL_PROVIDER_URL")),
+		EmailProviderToken:    strings.TrimSpace(os.Getenv("EMAIL_PROVIDER_TOKEN")),
+		EmailFrom:             strings.TrimSpace(os.Getenv("EMAIL_FROM")),
+		EmailAWSRegion:        strings.TrimSpace(os.Getenv("AWS_REGION")),
+		EmailConfigurationSet: strings.TrimSpace(os.Getenv("EMAIL_SES_CONFIGURATION_SET")),
 	}
 	if config.PollInterval < 100*time.Millisecond || config.LockTimeout < time.Second {
 		return WorkerConfig{}, errors.New("worker intervals are below the safe minimum")
 	}
-	if config.EmailDeliveryEnabled && (config.EmailProviderURL == "" || config.EmailProviderToken == "" || config.EmailFrom == "") {
-		return WorkerConfig{}, errors.New("EMAIL_PROVIDER_URL, EMAIL_PROVIDER_TOKEN, and EMAIL_FROM are required when email delivery is enabled")
+	if config.EmailDeliveryEnabled && config.EmailFrom == "" {
+		return WorkerConfig{}, errors.New("EMAIL_FROM is required when email delivery is enabled")
 	}
-	if config.EmailDeliveryEnabled {
+	if config.EmailDeliveryEnabled && config.EmailProvider == "webhook" {
+		if config.EmailProviderURL == "" || config.EmailProviderToken == "" {
+			return WorkerConfig{}, errors.New("EMAIL_PROVIDER_URL and EMAIL_PROVIDER_TOKEN are required for the webhook email provider")
+		}
 		providerURL, err := url.Parse(config.EmailProviderURL)
 		if err != nil || providerURL.Scheme != "https" || providerURL.Host == "" || providerURL.User != nil {
 			return WorkerConfig{}, errors.New("EMAIL_PROVIDER_URL must be an HTTPS URL without user information")
 		}
+	}
+	if config.EmailDeliveryEnabled && config.EmailProvider == "ses" && config.EmailAWSRegion == "" {
+		return WorkerConfig{}, errors.New("AWS_REGION is required for the SES email provider")
+	}
+	if config.EmailDeliveryEnabled && config.EmailProvider != "webhook" && config.EmailProvider != "ses" {
+		return WorkerConfig{}, errors.New("EMAIL_PROVIDER must be webhook or ses")
 	}
 	return config, nil
 }
@@ -103,8 +118,16 @@ func envDuration(key string, fallback time.Duration) (time.Duration, error) {
 	return value, nil
 }
 
-func NewWorker(db *pgxpool.Pool, stellar *StellarPaymentService, config WorkerConfig) *Worker {
-	return &Worker{db: db, stellar: stellar, config: config, http: &http.Client{Timeout: 10 * time.Second}, now: time.Now}
+func NewWorker(db *pgxpool.Pool, stellar *StellarPaymentService, config WorkerConfig) (*Worker, error) {
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	worker := &Worker{db: db, stellar: stellar, config: config, http: httpClient, now: time.Now}
+	if config.EmailDeliveryEnabled {
+		worker.email, worker.emailInitErr = newEmailSender(context.Background(), config, httpClient)
+		if worker.emailInitErr != nil {
+			return nil, worker.emailInitErr
+		}
+	}
+	return worker, nil
 }
 
 func (w *Worker) Run(ctx context.Context) error {
@@ -341,35 +364,13 @@ func (w *Worker) claimNotification(ctx context.Context) (notificationJob, error)
 }
 
 func (w *Worker) sendNotification(ctx context.Context, job notificationJob) (string, error) {
-	body, err := json.Marshal(map[string]any{
-		"from": w.config.EmailFrom, "to": job.Recipient, "category": job.Category,
-		"template": job.TemplateKey, "payload": job.Payload,
-	})
-	if err != nil {
-		return "", err
+	if w.emailInitErr != nil {
+		return "", w.emailInitErr
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, w.config.EmailProviderURL, bytes.NewReader(body))
-	if err != nil {
-		return "", err
+	if w.email == nil {
+		return "", errors.New("email provider is not initialized")
 	}
-	request.Header.Set("Authorization", "Bearer "+w.config.EmailProviderToken)
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Idempotency-Key", job.IdempotencyKey)
-	response, err := w.http.Do(request)
-	if err != nil {
-		return "", err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return "", fmt.Errorf("email provider returned %d", response.StatusCode)
-	}
-	var result struct {
-		ID string `json:"id"`
-	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&result); err != nil || strings.TrimSpace(result.ID) == "" {
-		return "", errors.New("email provider response omitted message id")
-	}
-	return result.ID, nil
+	return w.email.Send(ctx, job)
 }
 
 func (w *Worker) processOneSupportNotification(ctx context.Context) error {

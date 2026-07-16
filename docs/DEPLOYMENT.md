@@ -206,17 +206,24 @@ OBJECT_REGION=<region>
 OBJECT_KMS_KEY_ID=<kms-key-reference>
 OBJECT_UPLOAD_TTL_SECONDS=300
 OBJECT_REVIEW_TTL_SECONDS=180
-EMAIL_PROVIDER=<provider>
+EMAIL_PROVIDER=ses
 EMAIL_FROM=notifications@padalix.com
 EMAIL_DELIVERY_ENABLED=false
-EMAIL_PROVIDER_URL=https://<provider-api>/v1/send
-EMAIL_PROVIDER_TOKEN=<provider-secret>
+AWS_REGION=ap-southeast-1
+AWS_ACCESS_KEY_ID=<ses-send-only-access-key>
+AWS_SECRET_ACCESS_KEY=<ses-send-only-secret-key>
+EMAIL_SES_CONFIGURATION_SET=<optional-configuration-set>
 WORKER_ID=<unique-runtime-instance-id>
 WORKER_POLL_INTERVAL=2s
 WORKER_LOCK_TIMEOUT=2m
 KYC_VENDOR=<provider>
 KYC_WEBHOOK_SECRET=<vendor-specific-secret>
 ```
+
+For SES, verify the sending domain with DKIM, configure SPF and DMARC, request
+production access in the selected AWS region, and route bounce/complaint events
+to an operator-owned destination. Keep `EMAIL_DELIVERY_ENABLED=false` until a
+mailbox-simulator smoke test and one controlled real-recipient test pass.
 
 Give the API permission to create narrowly scoped signed URLs, not to administer buckets. Give the worker only the object-read and quarantine/delete permissions its jobs require. Store cloud credentials, vendor secrets, JWT signing material, database passwords, and email API keys in the runtime secret manager. Rotate independently and document owners and expiry dates.
 

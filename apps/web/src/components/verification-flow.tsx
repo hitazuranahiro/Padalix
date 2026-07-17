@@ -298,15 +298,11 @@ export function VerificationFlow({
       <div className="kyc-workspace">
         <aside className="kyc-context">
           <div>
-            <p>IDENTITY / QUALIFICATION</p>
-            <h1>
-              One check.
-              <br />
-              More access.
-            </h1>
+            <p>IDENTITY VERIFICATION</p>
+            <h1>Verify your identity.</h1>
             <span>
-              Verify your identity to send funds, cash out, and unlock higher
-              account limits.
+              Usually takes about three minutes. Have a valid government ID
+              ready before you begin.
             </span>
           </div>
           <ol aria-label="Verification progress">
@@ -315,6 +311,7 @@ export function VerificationFlow({
                 className={
                   index === step ? "current" : index < step ? "complete" : ""
                 }
+                aria-current={index === step ? "step" : undefined}
                 key={label}
               >
                 <i>
@@ -341,6 +338,13 @@ export function VerificationFlow({
         </aside>
 
         <section className="kyc-stage" aria-live="polite">
+          {!submitted && (
+            <div className="kyc-mobile-progress" aria-label={`Step ${step + 1} of ${steps.length}: ${steps[step]}`}>
+              <span>STEP {step + 1} OF {steps.length}</span>
+              <strong>{steps[step]}</strong>
+              <div aria-hidden="true"><i style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div>
+            </div>
+          )}
           {submitted ? (
             <div className="kyc-panel kyc-success">
               <div className="success-mark">
@@ -437,7 +441,9 @@ export function VerificationFlow({
                   },
                 ].map((item) => (
                   <button
+                    type="button"
                     className={documentType === item.id ? "selected" : ""}
+                    aria-pressed={documentType === item.id}
                     key={item.id}
                     onClick={() => setDocumentType(item.id)}
                   >
@@ -535,7 +541,7 @@ export function VerificationFlow({
                   </label>
                 </div>
               )}
-              {cameraError && <p className="camera-error">{cameraError}</p>}
+              {cameraError && <p className="camera-error" role="alert">{cameraError}</p>}
               {!cameraMode && (
                 <div className="kyc-actions">
                   <button className="kyc-back" onClick={() => setStep(1)}>
@@ -625,7 +631,7 @@ export function VerificationFlow({
                   </label>
                 </div>
               )}
-              {cameraError && <p className="camera-error">{cameraError}</p>}
+              {cameraError && <p className="camera-error" role="alert">{cameraError}</p>}
               {!cameraMode && (
                 <div className="kyc-actions">
                   <button className="kyc-back" onClick={() => setStep(2)}>
@@ -694,7 +700,7 @@ export function VerificationFlow({
                 </span>
               </label>
               {submissionError && (
-                <p className="submission-error">{submissionError}</p>
+                <p className="submission-error" role="alert">{submissionError}</p>
               )}
               <div className="kyc-actions">
                 <button className="kyc-back" onClick={() => setStep(3)}>

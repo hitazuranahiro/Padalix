@@ -227,6 +227,7 @@ and [release checklist](docs/RELEASE_CHECKLIST.md).
 - [KYC evidence storage](docs/KYC_EVIDENCE_STORAGE.md)
 - [Notifications and compliance](docs/NOTIFICATIONS_AND_COMPLIANCE.md)
 - [Smart contract audit notes](docs/SMART_CONTRACT_AUDIT.md)
+- [Easypanel worker and Amazon SES](docs/EASYPANEL_WORKER_AND_SES.md)
 
 ## Security and Regulatory Notice
 

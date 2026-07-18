@@ -66,6 +66,13 @@ test("uses provider-managed encryption for Cloudflare R2 uploads", async () => {
     assert.equal(upload.headers["x-amz-server-side-encryption"], undefined);
     assert.equal(upload.headers["x-amz-checksum-sha256"], undefined);
     assert.match(upload.url, /r2\.cloudflarestorage\.com/);
+    assert.doesNotMatch(upload.url, /x-amz-checksum-crc32/i);
+    assert.doesNotMatch(upload.url, /x-amz-sdk-checksum-algorithm/i);
+    assert.doesNotMatch(upload.url, /x-amz-meta-padalix-sha256=/i);
+    const signedHeaders =
+      new URL(upload.url).searchParams.get("X-Amz-SignedHeaders") ?? "";
+    assert.match(signedHeaders, /content-type/);
+    assert.match(signedHeaders, /x-amz-meta-padalix-sha256/);
   } finally {
     for (const name of Object.keys(values)) {
       if (previous[name] === undefined) delete process.env[name];

@@ -58,6 +58,9 @@ function client(config: StorageConfig) {
     region: config.region,
     endpoint: config.endpoint,
     forcePathStyle: config.forcePathStyle,
+    // Presigned browser uploads do not have a request body at signing time.
+    // The SDK's default CRC32 calculation would therefore sign an empty body.
+    requestChecksumCalculation: "WHEN_REQUIRED",
     credentials: {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
@@ -91,24 +94,29 @@ export async function createEvidenceUpload(input: {
     SSEKMSKeyId:
       config.encryption === "aws:kms" ? config.kmsKeyId : undefined,
   });
+  const headers = {
+    "content-type": input.mimeType,
+    ...(config.encryption !== "provider"
+      ? { "x-amz-checksum-sha256": checksum }
+      : {}),
+    "x-amz-meta-padalix-sha256": input.checksumSha256,
+    ...(config.encryption !== "provider"
+      ? { "x-amz-server-side-encryption": config.encryption }
+      : {}),
+    ...(config.encryption === "aws:kms" && config.kmsKeyId
+      ? { "x-amz-server-side-encryption-aws-kms-key-id": config.kmsKeyId }
+      : {}),
+  };
   return {
     bucket: config.bucket,
     url: await getSignedUrl(client(config), command, {
       expiresIn: evidencePolicy.uploadUrlSeconds,
+      signableHeaders: new Set(["content-type"]),
+      unhoistableHeaders: new Set(
+        Object.keys(headers).filter((header) => header.startsWith("x-amz-")),
+      ),
     }),
-    headers: {
-      "content-type": input.mimeType,
-      ...(config.encryption !== "provider"
-        ? { "x-amz-checksum-sha256": checksum }
-        : {}),
-      "x-amz-meta-padalix-sha256": input.checksumSha256,
-      ...(config.encryption !== "provider"
-        ? { "x-amz-server-side-encryption": config.encryption }
-        : {}),
-      ...(config.encryption === "aws:kms" && config.kmsKeyId
-        ? { "x-amz-server-side-encryption-aws-kms-key-id": config.kmsKeyId }
-        : {}),
-    },
+    headers,
   };
 }
 
@@ -118,7 +126,7 @@ export async function inspectEvidenceObject(key: string) {
     new HeadObjectCommand({
       Bucket: config.bucket,
       Key: key,
-      ChecksumMode: "ENABLED",
+      ChecksumMode: config.encryption === "provider" ? undefined : "ENABLED",
     }),
   );
   let storageChecksumSha256 = result.ChecksumSHA256;

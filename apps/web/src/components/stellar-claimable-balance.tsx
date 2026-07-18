@@ -20,7 +20,7 @@ export function StellarClaimableBalanceFlow({ wallets, config, allowed }: { wall
   const [walletId, setWalletId] = useState(wallets[0]?.id ?? "");
   const [claimant, setClaimant] = useState("");
   const [amount, setAmount] = useState("1.0000000");
-  const [balances, setBalances] = useState<{ walletId: string; items: StellarBalance[] }>({ walletId: "", items: [] });
+  const [balances, setBalances] = useState<{ walletId: string; funded: boolean | null; items: StellarBalance[] }>({ walletId: "", funded: null, items: [] });
   const [phase, setPhase] = useState<Phase>("idle");
   const [message, setMessage] = useState("");
   const [intent, setIntent] = useState<StellarClaimableBalance | null>(null);
@@ -28,11 +28,13 @@ export function StellarClaimableBalanceFlow({ wallets, config, allowed }: { wall
   const busy = ["preparing", "signing", "submitting", "reconciling"].includes(phase);
   const activeWallet = wallets.find((wallet) => wallet.id === walletId);
   const assetBalance = balances.walletId === walletId ? balances.items.find((item) => item.assetCode === config.assetCode && (config.assetCode === "XLM" || item.issuer === config.issuer)) : undefined;
+  const balanceLoaded = balances.walletId === walletId;
+  const sourceFunded = balanceLoaded && balances.funded !== false;
 
   useEffect(() => {
     if (!walletId || !config.enabled) return;
     let cancelled = false;
-    fetch(`/api/platform/stellar-wallets/${encodeURIComponent(walletId)}/balances`, { cache: "no-store" }).then((response) => responseBody<StellarBalanceList>(response)).then((body) => { if (!cancelled) setBalances({ walletId, items: body.balances }); }).catch((error) => { if (!cancelled) setMessage(error instanceof Error ? error.message : "Balance unavailable"); });
+    fetch(`/api/platform/stellar-wallets/${encodeURIComponent(walletId)}/balances`, { cache: "no-store" }).then((response) => responseBody<StellarBalanceList>(response)).then((body) => { if (!cancelled) { const funded = body.funded ?? true; setBalances({ walletId, funded, items: body.balances }); if (!funded) setMessage("This wallet is linked but not funded on Stellar testnet. Use Friendbot, then reload the balance."); } }).catch((error) => { if (!cancelled) setMessage(error instanceof Error ? error.message : "Balance unavailable"); });
     return () => { cancelled = true; };
   }, [walletId, config.enabled]);
 
@@ -78,7 +80,7 @@ export function StellarClaimableBalanceFlow({ wallets, config, allowed }: { wall
   }
 
   function reset() { setIntent(null); setPhase("idle"); setMessage(""); setIdempotencyKey(""); }
-  const canStart = config.enabled && allowed && Boolean(activeWallet) && /^G[A-Z2-7]{55}$/.test(claimant.trim()) && claimant.trim() !== activeWallet?.publicKey && Number(amount) > 0;
+  const canStart = config.enabled && allowed && Boolean(activeWallet) && sourceFunded && /^G[A-Z2-7]{55}$/.test(claimant.trim()) && claimant.trim() !== activeWallet?.publicKey && Number(amount) > 0;
 
   return <main className={styles.page}>
     <header className={styles.hero}><div><p>STELLAR CLAIMABLE BALANCE</p><h1>Send now. Claim later.</h1><span>Create a real testnet balance the recipient can claim immediately. If untouched, the sender becomes eligible to reclaim it after seven days.</span></div><aside data-enabled={config.enabled}><Gift size={20} /><span><small>EXECUTION MODE</small><strong>{config.enabled ? "TESTNET ACTIVE" : "DISABLED"}</strong></span></aside></header>
@@ -89,7 +91,8 @@ export function StellarClaimableBalanceFlow({ wallets, config, allowed }: { wall
         {!allowed ? <div className={styles.blocked}><TriangleAlert size={18} />A verified Padalix account is required.</div> : null}
         {!wallets.length ? <div className={styles.blocked}><WalletCards size={18} /><span>Link a testnet wallet first. <Link href="/wallet">Open wallet setup</Link></span></div> : null}
         <label><span>SOURCE WALLET</span><select value={walletId} onChange={(event) => { setWalletId(event.target.value); reset(); }} disabled={busy}>{wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{compact(wallet.publicKey)}</option>)}</select></label>
-        <div className={styles.balance}><span>AVAILABLE {config.assetCode}</span><strong>{balances.walletId !== walletId ? "LOADING" : assetBalance ? Number(assetBalance.balance).toLocaleString(undefined, { maximumFractionDigits: 7 }) : "NOT AVAILABLE"}</strong></div>
+        <div className={styles.balance}><span>AVAILABLE {config.assetCode}</span><strong>{!balanceLoaded ? "LOADING" : balances.funded === false ? "NOT FUNDED" : assetBalance ? Number(assetBalance.balance).toLocaleString(undefined, { maximumFractionDigits: 7 }) : "NOT AVAILABLE"}</strong></div>
+        {balanceLoaded && balances.funded === false && activeWallet ? <div className={styles.blocked}><TriangleAlert size={18} /><span>This account does not exist on Stellar testnet yet. <a href={`https://friendbot.stellar.org/?addr=${encodeURIComponent(activeWallet.publicKey)}`} target="_blank" rel="noreferrer">Fund with Friendbot</a>, then reload this page.</span></div> : null}
         <label><span>RECIPIENT STELLAR ACCOUNT</span><input value={claimant} onChange={(event) => { setClaimant(event.target.value.toUpperCase()); reset(); }} placeholder="G..." spellCheck={false} disabled={busy} /></label>
         <label><span>AMOUNT / {config.assetCode}</span><input value={amount} onChange={(event) => { setAmount(event.target.value); reset(); }} inputMode="decimal" disabled={busy} /></label>
         <button disabled={!canStart || busy}>{busy ? <LoaderCircle className={styles.spin} size={17} /> : <Gift size={17} />}<span>{busy ? phase.toUpperCase() : intent?.status === "prepared" ? "SIGN PREPARED BALANCE" : "CREATE CLAIMABLE BALANCE"}</span><ArrowRight size={16} /></button>

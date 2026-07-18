@@ -73,13 +73,22 @@ func (s *Service) stellarWalletBalances(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, "Stellar wallet unavailable")
 		return
 	}
+	funded := true
 	balances, err := s.stellarPayments.network.Balances(r.Context(), publicKey)
-	if err != nil {
+	if errors.Is(err, errStellarAccountNotFunded) {
+		funded = false
+		balances = []stellarBalance{}
+	} else if err != nil {
+		slog.Warn("Stellar balance lookup failed",
+			"correlation_id", currentCorrelationID(r.Context()),
+			"wallet_id", walletID,
+			"error", err,
+		)
 		writeError(w, http.StatusBadGateway, "Stellar balance unavailable")
 		return
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
-	writeJSON(w, http.StatusOK, map[string]any{"publicKey": publicKey, "network": "testnet", "balances": balances})
+	writeJSON(w, http.StatusOK, map[string]any{"publicKey": publicKey, "network": "testnet", "funded": funded, "balances": balances})
 }
 
 func (s *Service) prepareStellarPayment(w http.ResponseWriter, r *http.Request) {

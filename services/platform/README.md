@@ -9,6 +9,18 @@ pnpm dev:platform
 
 Local health endpoint: `http://127.0.0.1:8080/health`
 
+Seed an existing signed-in account for a repeatable demonstration without
+creating or storing login credentials:
+
+```bash
+DATABASE_URL=<postgres-url> DEMO_AUTH_SUBJECT=<better-auth-user-id> pnpm db:seed-demo
+```
+
+The command is idempotent. It sets the existing member to `verified`, restores
+the sandbox USDC balance to `1000`, and upserts three reusable Philippine demo
+recipients. It never deletes transfers, receipts, ledger entries, or audit
+events.
+
 Worker liveness is available at `GET /health/worker`. It returns `503` when no
 worker has registered, the latest heartbeat is more than 60 seconds old, or the
 last completed cycle failed. `GET /internal/operations/metrics` requires the
@@ -27,7 +39,15 @@ root directory. `Dockerfile.vercel` builds the service and the runtime-provided
 `PORT` is used automatically. Configure `DATABASE_URL` and
 `PLATFORM_INTERNAL_TOKEN` as server-only sensitive variables.
 
-All `/v1/*` routes require the server-only `PLATFORM_INTERNAL_TOKEN` plus identity headers from the authenticated Next.js gateway. Browsers must never call this service directly or receive the internal token.
+All `/v1/*` routes require the server-only `PLATFORM_INTERNAL_TOKEN` plus identity headers from the authenticated Next.js gateway, except the bearer-token recipient claim redemption route described below. Browsers must never receive the internal platform token.
+
+Migration `024_account_preferences_and_terms.sql` adds durable member profiles,
+regional and notification preferences, versioned published legal documents, and
+append-only member acceptance evidence. Deploy the migration, platform API, and
+web routes before setting `TERMS_ACCEPTANCE_ENFORCED=true`. With enforcement
+enabled, protected platform routes return HTTP 428 until the authenticated
+member accepts the current published Terms; account, profile, settings, and
+legal acceptance routes remain available to resolve the gate.
 
 ## Implemented Routes
 
@@ -38,6 +58,8 @@ All `/v1/*` routes require the server-only `PLATFORM_INTERNAL_TOKEN` plus identi
 - `GET /v1/transfers`
 - `GET /v1/transfers/{reference}`
 - `GET /v1/transfers/{reference}/receipt`
+- `POST /v1/transfers/{reference}/claims`
+- `POST /v1/recipient-claims/redeem`
 - `GET /v1/exports/transfers`
 - `GET /v1/recipients`
 - `POST /v1/recipients`
@@ -52,6 +74,51 @@ All `/v1/*` routes require the server-only `PLATFORM_INTERNAL_TOKEN` plus identi
 - `POST /v1/stellar-payments/prepare`
 - `POST /v1/stellar-payments/{paymentID}/submit`
 - `GET /v1/stellar-payments/{paymentID}`
+- `POST /v1/stellar-claimable-balances/prepare`
+- `POST /v1/stellar-claimable-balances/{intentID}/submit`
+- `GET /v1/stellar-claimable-balances/{intentID}`
+- `GET /v1/family-distributions`
+- `POST /v1/family-distributions`
+- `GET /v1/family-distributions/{planID}`
+- `POST /v1/family-distributions/{planID}/executions`
+
+## Recipient Claims
+
+An authenticated sender can create one active claim for a confirmed transfer
+that already has a saved recipient. The recipient is inferred from the owned
+transfer. The response returns a high-entropy `claimToken` once; only its
+SHA-256 digest is stored. Claims expire after 24 hours by default, accept a
+configurable 5-minute to 7-day lifetime, and lock after 5 failed attempts by
+default (maximum 10).
+
+`POST /v1/recipient-claims/redeem` is intentionally not authenticated with the
+internal platform token. The claim token is its bearer credential and every
+request must include an 8-100 character `Idempotency-Key`. Redemption locks the
+claim row and records its terminal transition atomically. A retry with the same
+key returns the existing redemption; a different key cannot redeem it again.
+This lifecycle does not create a Stellar claimable balance or release payout
+funds. A settlement adapter must perform and reconcile value movement before
+the feature can be represented as recipient payout.
+
+The separate Stellar claimable-balance endpoints build a real testnet
+`CreateClaimableBalance` transaction. The verified sender wallet signs it in
+the browser. The recipient can claim immediately, while the same sender wallet
+becomes eligible to recover an unclaimed balance after seven days. The API
+persists the deterministic balance ID and transaction hash, submits the signed
+envelope without storing it, and reconciles final ledger status through the
+durable worker.
+
+## Family Distribution Execution
+
+Family plans allocate exactly 10,000 basis points across 2-20 sender-owned
+recipients. An execution performs one atomic sandbox wallet debit, creates one
+confirmed transfer and balanced ledger transaction per recipient, and returns
+receipt references. Amount allocation uses seven-decimal integer units and the
+last member receives the rounding remainder.
+
+This execution path is intentionally `sandbox` until every member has a
+verified Stellar public key or a provider payout instrument. It must not be
+described as a live bank, wallet, or on-chain payout.
 
 ## Stellar Wallet Ownership
 
@@ -119,6 +186,45 @@ asset such as testnet USDC requires its exact issuer and user trustlines before
 it should be enabled.
 
 Payment methods come from the connector catalog and are enabled per provider, environment, country, and currency. A provider cannot be activated in production without an external credential reference. Provider secrets and raw payout instruments must live in a vault, never in these tables.
+
+## Ganap funding checkout
+
+Migration `019_ganap_checkout_connector.sql` adds a provider-neutral funding
+checkout record and registers Ganap as a disabled `funding_checkout` connector.
+This integration collects PHP through Ganap. It is not a Stellar anchor, an
+off-ramp, or evidence that a recipient was paid. A successful webhook confirms
+only the Ganap checkout collection.
+
+The API exposes authenticated customer routes at
+`POST /v1/funding-checkouts` and `GET /v1/funding-checkouts/{externalID}`.
+Creation requires an `Idempotency-Key`, a Ganap-valid amount (`0`, or
+`200` through `50000`), and success/failure URLs whose HTTPS origin appears in
+`GANAP_REDIRECT_ALLOWED_ORIGINS`. The service generates the unique provider
+`externalId`; clients cannot select it. Provider references and status are
+stored without persisting the API credential.
+
+Configure the Ganap callback URL as:
+
+```text
+https://api.padalix.com/internal/connectors/ganap/webhooks/<GANAP_WEBHOOK_PATH_SECRET>
+```
+
+The documented Ganap payload does not include a signature, event ID, or
+timestamp. Padalix therefore authenticates the callback with a high-entropy
+unguessable URL segment and deduplicates the derived event identity in
+`platform.webhook_inbox`. If Ganap supports a custom callback header, also set
+`GANAP_WEBHOOK_HEADER_NAME` and `GANAP_WEBHOOK_HEADER_SECRET`; both checks then
+become mandatory. This is weaker than a signed raw-body webhook: URL secrets can
+appear in provider or proxy logs, and there is no cryptographic proof of payload
+origin or freshness. Keep the connector disabled for unrestricted production
+use until Ganap documents signed webhooks. Restrict the route at the edge to
+Ganap source IPs when stable ranges are available, redact request paths in logs,
+rate-limit it, monitor amount/reference conflicts, and rotate the path secret.
+
+After migration and staging replay tests, an operator must explicitly change
+`platform.payment_connector.status` for `ganap_checkout` from `disabled` to
+`pilot` before checkout creation is accepted. Any Ganap key shared in chat or a
+ticket must be revoked and replaced through the deployment secret manager.
 
 Sandbox transfers remain deterministic internal ledger operations and are kept
 separate from `stellar_testnet` transfers. Testnet transfers require a verified

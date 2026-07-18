@@ -54,6 +54,19 @@ func main() {
 	}
 
 	service := platform.NewWithStellarServices(pool, internalToken, stellarWalletAuth, stellarPayments)
+	ganapConfig, err := platform.GanapCheckoutConfigFromEnv()
+	if err != nil {
+		slog.Error("Ganap checkout configuration invalid", "error", err)
+		os.Exit(1)
+	}
+	if ganapConfig.Enabled {
+		ganapCheckout, err := platform.NewGanapCheckoutConnector(ganapConfig, nil)
+		if err != nil {
+			slog.Error("Ganap checkout connector unavailable", "error", err)
+			os.Exit(1)
+		}
+		service.SetGanapCheckoutConnector(ganapCheckout)
+	}
 	server := &http.Server{
 		Addr:              listenAddress(),
 		Handler:           service.Handler(),

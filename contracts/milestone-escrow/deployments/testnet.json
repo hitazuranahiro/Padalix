@@ -1,0 +1,10 @@
+{
+  "network": "Test SDF Network ; September 2015",
+  "contractId": "CAUDUT6UNBGUPLM3AI2K25D6GY3NRAJO736AYO6RB5JBEVDOTR7XMDAW",
+  "wasmSha256": "713b92d70ac6ee1583d98e312d4ef59a5a22615aac4379e7639503410a8a39e3",
+  "wasmUploadTransaction": "c4e9cd448c0bbd5fcd21a6436c63328173275698864c8f5aa7c9c93d9822766d",
+  "contractDeployTransaction": "966b9c781d7305132370534aa55f0feeab2f6c08a4ed23b593016fded47752ea",
+  "deployedAt": "2026-07-18",
+  "sourceIdentityAlias": "padalix-escrow-deployer",
+  "status": "testnet-only"
+}

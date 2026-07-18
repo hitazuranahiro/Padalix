@@ -24,7 +24,7 @@ async function responseBody<T>(response: Response) {
 
 const delay = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
-export function StellarTestnetPayment({ wallets, config, allowed }: { wallets: StellarWalletLink[]; config: StellarPaymentConfig; allowed: boolean }) {
+export function StellarTestnetPayment({ wallets, config, allowed, primary = false }: { wallets: StellarWalletLink[]; config: StellarPaymentConfig; allowed: boolean; primary?: boolean }) {
   const [walletId, setWalletId] = useState(wallets[0]?.id ?? "");
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("1.0000000");
@@ -143,7 +143,7 @@ export function StellarTestnetPayment({ wallets, config, allowed }: { wallets: S
   return (
     <main className={styles.page}>
       <header className={styles.hero}>
-        <div><p>STELLAR TESTNET</p><h1>Send on testnet</h1><span>Prepare a genuine Stellar testnet payment, review it in your wallet, and track its confirmation.</span></div>
+        <div><p>{primary ? "NEW TRANSFER / STELLAR TESTNET" : "STELLAR TESTNET"}</p><h1>{primary ? "Send money" : "Send on testnet"}</h1><span>Prepare a genuine Stellar testnet payment, review it in your wallet, and track its confirmation through the Padalix receipt.</span></div>
         <aside data-enabled={config.enabled}><RadioTower size={20} /><span><small>EXECUTION MODE</small><strong>{config.enabled ? "TESTNET ACTIVE" : "DISABLED"}</strong></span></aside>
       </header>
 

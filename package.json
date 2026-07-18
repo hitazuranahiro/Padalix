@@ -6,8 +6,10 @@
     "dev:admin": "pnpm --filter @padalix/admin dev",
     "dev:marketing": "pnpm --filter @padalix/marketing dev",
     "dev:platform": "bash scripts/dev-platform-local.sh",
+    "dev:worker": "bash scripts/dev-worker-local.sh",
     "dev:web": "bash scripts/dev-web-local.sh",
     "db:migrate": "bash scripts/migrate-local.sh",
+    "db:seed-demo": "bash scripts/seed-demo.sh",
     "build": "pnpm --filter @padalix/marketing build && pnpm --filter @padalix/admin build && BETTER_AUTH_SECRET=$(openssl rand -hex 32) BETTER_AUTH_URL=http://localhost:3002 DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build PLATFORM_API_ORIGIN_URL=http://127.0.0.1:8080 PLATFORM_INTERNAL_TOKEN=build-only pnpm --filter @padalix/web build && (cd services/platform && go build ./...)",
     "lint": "pnpm --filter @padalix/marketing lint && pnpm --filter @padalix/admin lint && pnpm --filter @padalix/web lint",
     "typecheck": "pnpm --filter @padalix/marketing typecheck && pnpm --filter @padalix/admin typecheck && pnpm --filter @padalix/web typecheck && (cd services/platform && go test ./...)"

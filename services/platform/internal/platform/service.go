@@ -20,11 +20,13 @@ import (
 )
 
 type Service struct {
-	db                 *pgxpool.Pool
-	internalToken      string
-	stellarWalletAuth  *StellarWalletAuth
-	stellarPayments    *StellarPaymentService
-	complianceEnforced bool
+	db                      *pgxpool.Pool
+	internalToken           string
+	stellarWalletAuth       *StellarWalletAuth
+	stellarPayments         *StellarPaymentService
+	ganapCheckout           *GanapCheckoutConnector
+	complianceEnforced      bool
+	termsAcceptanceEnforced bool
 }
 
 type identity struct {
@@ -65,7 +67,8 @@ func NewWithStellarWalletAuth(db *pgxpool.Pool, internalToken string, auth *Stel
 func NewWithStellarServices(db *pgxpool.Pool, internalToken string, auth *StellarWalletAuth, payments *StellarPaymentService) *Service {
 	return &Service{
 		db: db, internalToken: internalToken, stellarWalletAuth: auth, stellarPayments: payments,
-		complianceEnforced: strings.EqualFold(strings.TrimSpace(os.Getenv("COMPLIANCE_ENFORCEMENT_ENABLED")), "true"),
+		complianceEnforced:      strings.EqualFold(strings.TrimSpace(os.Getenv("COMPLIANCE_ENFORCEMENT_ENABLED")), "true"),
+		termsAcceptanceEnforced: strings.EqualFold(strings.TrimSpace(os.Getenv("TERMS_ACCEPTANCE_ENFORCED")), "true"),
 	}
 }
 
@@ -75,16 +78,30 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("GET /health/worker", s.workerHealth)
 	mux.HandleFunc("GET /internal/operations/metrics", s.operationalMetrics)
 	mux.Handle("GET /v1/account", s.authenticate(http.HandlerFunc(s.getAccount)))
+	mux.Handle("GET /v1/profile", s.authenticate(http.HandlerFunc(s.getProfile)))
+	mux.Handle("PATCH /v1/profile", s.authenticate(http.HandlerFunc(s.updateProfile)))
+	mux.Handle("GET /v1/settings", s.authenticate(http.HandlerFunc(s.getSettings)))
+	mux.Handle("PATCH /v1/settings", s.authenticate(http.HandlerFunc(s.updateSettings)))
+	mux.Handle("GET /v1/legal/terms/current", s.authenticate(http.HandlerFunc(s.getCurrentTerms)))
+	mux.Handle("POST /v1/legal/terms/acceptance", s.authenticate(http.HandlerFunc(s.acceptCurrentTerms)))
 	mux.Handle("GET /v1/dashboard", s.authenticate(http.HandlerFunc(s.getDashboard)))
 	mux.Handle("GET /v1/payment-methods", s.authenticate(http.HandlerFunc(s.listPaymentMethods)))
 	mux.Handle("GET /v1/activity", s.authenticate(http.HandlerFunc(s.getActivity)))
 	mux.Handle("GET /v1/recipients", s.authenticate(http.HandlerFunc(s.getRecipients)))
 	mux.Handle("POST /v1/recipients", s.authenticate(http.HandlerFunc(s.createRecipient)))
+	mux.Handle("POST /v1/family-distributions", s.authenticate(http.HandlerFunc(s.createFamilyDistribution)))
+	mux.Handle("GET /v1/family-distributions", s.authenticate(http.HandlerFunc(s.listFamilyDistributions)))
+	mux.Handle("GET /v1/family-distributions/{planID}", s.authenticate(http.HandlerFunc(s.getFamilyDistribution)))
+	mux.Handle("POST /v1/family-distributions/{planID}/executions", s.authenticate(http.HandlerFunc(s.executeFamilyDistribution)))
 	mux.Handle("POST /v1/quotes", s.authenticate(http.HandlerFunc(s.createQuote)))
+	mux.Handle("POST /v1/funding-checkouts", s.authenticate(http.HandlerFunc(s.createFundingCheckout)))
+	mux.Handle("GET /v1/funding-checkouts/{externalID}", s.authenticate(http.HandlerFunc(s.getFundingCheckout)))
 	mux.Handle("POST /v1/transfers", s.authenticate(http.HandlerFunc(s.createTransfer)))
 	mux.Handle("GET /v1/transfers", s.authenticate(http.HandlerFunc(s.listTransfers)))
 	mux.Handle("GET /v1/transfers/{reference}", s.authenticate(http.HandlerFunc(s.getTransfer)))
 	mux.Handle("GET /v1/transfers/{reference}/receipt", s.authenticate(http.HandlerFunc(s.exportTransferReceipt)))
+	mux.Handle("POST /v1/transfers/{reference}/claims", s.authenticate(http.HandlerFunc(s.createRecipientClaim)))
+	mux.HandleFunc("POST /v1/recipient-claims/redeem", s.redeemRecipientClaim)
 	mux.Handle("GET /v1/exports/transfers", s.authenticate(http.HandlerFunc(s.exportTransfers)))
 	mux.Handle("POST /v1/stellar-wallets/challenge", s.authenticate(http.HandlerFunc(s.createStellarWalletChallenge)))
 	mux.Handle("POST /v1/stellar-wallets/verify", s.authenticate(http.HandlerFunc(s.verifyStellarWalletChallenge)))
@@ -95,6 +112,10 @@ func (s *Service) Handler() http.Handler {
 	mux.Handle("POST /v1/stellar-payments/prepare", s.authenticate(http.HandlerFunc(s.prepareStellarPayment)))
 	mux.Handle("POST /v1/stellar-payments/{paymentID}/submit", s.authenticate(http.HandlerFunc(s.submitStellarPayment)))
 	mux.Handle("GET /v1/stellar-payments/{paymentID}", s.authenticate(http.HandlerFunc(s.getStellarPayment)))
+	mux.Handle("POST /v1/stellar-claimable-balances/prepare", s.authenticate(http.HandlerFunc(s.prepareStellarClaimableBalance)))
+	mux.Handle("POST /v1/stellar-claimable-balances/{intentID}/submit", s.authenticate(http.HandlerFunc(s.submitStellarClaimableBalance)))
+	mux.Handle("GET /v1/stellar-claimable-balances/{intentID}", s.authenticate(http.HandlerFunc(s.getStellarClaimableBalance)))
+	mux.HandleFunc("POST /internal/connectors/ganap/webhooks/{secret}", s.receiveGanapWebhook)
 	return withHTTPBoundary(mux)
 }
 
@@ -127,6 +148,17 @@ func (s *Service) authenticate(next http.Handler) http.Handler {
 		if _, err := s.ensureAccount(r.Context(), id); err != nil {
 			writeError(w, http.StatusInternalServerError, "account initialization failed")
 			return
+		}
+		if s.termsAcceptanceEnforced && !termsGateExempt(r.URL.Path) {
+			required, err := s.termsAcceptanceRequired(r.Context(), id.Subject)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "terms status unavailable")
+				return
+			}
+			if required {
+				writeError(w, http.StatusPreconditionRequired, "terms acceptance required")
+				return
+			}
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey, id)))
 	})
@@ -171,8 +203,9 @@ func (s *Service) ensureAccount(ctx context.Context, id identity) (string, error
 
 func (s *Service) accountFor(ctx context.Context, subject string) (account, error) {
 	var result account
-	err := s.db.QueryRow(ctx, `select a.id,m.id,m.full_name,m.email,m.verification_level,m.account_status,w.available_balance::text,w.asset_code,w.network,
+	err := s.db.QueryRow(ctx, `select a.id,m.id,coalesce(p.preferred_name,m.full_name),m.email,m.verification_level,m.account_status,w.available_balance::text,w.asset_code,w.network,
 		coalesce(k.reference,''),coalesce(k.status,'') from platform.account a join identity.member m on m.id=a.member_id
+		left join identity.member_profile p on p.member_id=m.id
 		join platform.wallet w on w.account_id=a.id and w.asset_code='USDC' and w.network='sandbox'
 		left join lateral(select reference,status from compliance.kyc_case where member_id=m.id order by created_at desc limit 1) k on true where a.auth_subject=$1`, subject).Scan(
 		&result.ID, &result.MemberID, &result.Name, &result.Email, &result.VerificationLevel, &result.AccountStatus, &result.Balance, &result.Asset, &result.Network, &result.KYCReference, &result.KYCStatus)

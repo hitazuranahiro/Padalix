@@ -23,6 +23,13 @@ for migration in \
   015_platform_worker_and_ledger.sql \
   016_kyc_evidence_storage.sql \
   017_compliance_control_plane.sql \
-  018_worker_observability.sql; do
+  018_worker_observability.sql \
+  019_ganap_checkout_connector.sql \
+  020_family_distribution.sql \
+  021_recipient_claims.sql \
+  022_stellar_claimable_balances.sql \
+  023_family_distribution_execution.sql \
+  024_account_preferences_and_terms.sql \
+  025_customer_experience.sql; do
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT_DIR/apps/admin/sql/$migration"
 done

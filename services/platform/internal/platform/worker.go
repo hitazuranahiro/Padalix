@@ -260,6 +260,15 @@ func (w *Worker) enqueueMissingReconciliation(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("enqueue reconciliation: %w", err)
 	}
+	_, err = w.db.Exec(ctx, `insert into platform.outbox_job(
+		id,topic,aggregate_type,aggregate_id,idempotency_key,payload,status,max_attempts
+	) select gen_random_uuid()::text,$1,'stellar_claimable_balance',i.id,'stellar-claimable-reconcile:'||i.id,
+		jsonb_build_object('claimableBalanceIntentId',i.id,'transactionHash',i.transaction_hash),'pending',12
+	from platform.stellar_claimable_balance_intent i where i.status='submitted'
+	on conflict(idempotency_key) do nothing`, stellarClaimableReconcileTopic)
+	if err != nil {
+		return fmt.Errorf("enqueue claimable balance reconciliation: %w", err)
+	}
 	return nil
 }
 
@@ -271,9 +280,17 @@ func (w *Worker) processOnePlatformJob(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if job.Topic != stellarReconcileTopic {
+	switch job.Topic {
+	case stellarReconcileTopic:
+		return w.processStellarPaymentJob(ctx, job)
+	case stellarClaimableReconcileTopic:
+		return w.processStellarClaimableJob(ctx, job)
+	default:
 		return w.retryPlatformJob(ctx, job, "unsupported_topic")
 	}
+}
+
+func (w *Worker) processStellarPaymentJob(ctx context.Context, job outboxJob) error {
 	record, err := scanStellarPaymentRow(w.db.QueryRow(ctx, stellarPaymentSelect+` where i.id=$1`, job.AggregateID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return w.deadLetterPlatformJob(ctx, job, "payment_not_found")
@@ -307,13 +324,47 @@ func (w *Worker) processOnePlatformJob(ctx context.Context) error {
 	}
 }
 
+func (w *Worker) processStellarClaimableJob(ctx context.Context, job outboxJob) error {
+	record, err := scanStellarClaimableRow(w.db.QueryRow(ctx, stellarClaimableSelect+` where i.id=$1`, job.AggregateID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return w.deadLetterPlatformJob(ctx, job, "claimable_balance_not_found")
+	}
+	if err != nil {
+		return w.retryPlatformJob(ctx, job, "claimable_balance_load_failed")
+	}
+	if record.Status == "confirmed" || record.Status == "failed" || record.Status == "expired" {
+		return w.completePlatformJob(ctx, job.ID)
+	}
+	result, err := w.stellar.network.Transaction(ctx, record.TransactionHash)
+	if err != nil {
+		return w.retryPlatformJob(ctx, job, "stellar_lookup_failed")
+	}
+	switch strings.ToUpper(result.Status) {
+	case "SUCCESS":
+		if result.Ledger == 0 {
+			return w.retryPlatformJob(ctx, job, "stellar_ledger_missing")
+		}
+		if err := confirmStellarClaimableContext(ctx, w.db, record, int64(result.Ledger)); err != nil {
+			return w.retryPlatformJob(ctx, job, "confirmation_persistence_failed")
+		}
+		return w.completePlatformJob(ctx, job.ID)
+	case "FAILED":
+		if err := failStellarClaimableContext(ctx, w.db, record, "stellar_failed"); err != nil {
+			return w.retryPlatformJob(ctx, job, "failure_persistence_failed")
+		}
+		return w.completePlatformJob(ctx, job.ID)
+	default:
+		return w.retryPlatformJob(ctx, job, "stellar_pending")
+	}
+}
+
 func (w *Worker) claimPlatformJob(ctx context.Context) (outboxJob, error) {
 	var job outboxJob
 	err := w.db.QueryRow(ctx, `with candidate as (
-		select id from platform.outbox_job where status='pending' and topic=$2 and available_at <= now()
+		select id from platform.outbox_job where status='pending' and topic=any($2::text[]) and available_at <= now()
 		order by available_at,created_at for update skip locked limit 1
 	) update platform.outbox_job j set status='processing',attempts=j.attempts+1,locked_at=now(),locked_by=$1,updated_at=now()
-	from candidate where j.id=candidate.id returning j.id,j.topic,j.aggregate_id,j.attempts,j.max_attempts`, w.config.ID, stellarReconcileTopic).
+	from candidate where j.id=candidate.id returning j.id,j.topic,j.aggregate_id,j.attempts,j.max_attempts`, w.config.ID, []string{stellarReconcileTopic, stellarClaimableReconcileTopic}).
 		Scan(&job.ID, &job.Topic, &job.AggregateID, &job.Attempts, &job.MaxAttempts)
 	return job, err
 }
@@ -355,6 +406,14 @@ func (w *Worker) deadLetterPlatformJob(ctx context.Context, job outboxJob, code 
 		on conflict(payment_intent_id,exception_code) do nothing`, newID(), code, job.ID, job.AggregateID)
 		if err == nil {
 			_, err = tx.Exec(ctx, `update platform.stellar_payment_intent set reconciliation_status='exception',updated_at=now() where id=$1`, job.AggregateID)
+		}
+	} else if job.Topic == stellarClaimableReconcileTopic {
+		_, err = tx.Exec(ctx, `insert into platform.reconciliation_exception(
+			id,transfer_id,claimable_balance_intent_id,exception_code,details
+		) select $1,transfer_id,id,$2,jsonb_build_object('outboxJobId',$3) from platform.stellar_claimable_balance_intent where id=$4
+		on conflict(claimable_balance_intent_id,exception_code) where claimable_balance_intent_id is not null do nothing`, newID(), code, job.ID, job.AggregateID)
+		if err == nil {
+			_, err = tx.Exec(ctx, `update platform.stellar_claimable_balance_intent set reconciliation_status='exception',updated_at=now() where id=$1`, job.AggregateID)
 		}
 	}
 	if err != nil {

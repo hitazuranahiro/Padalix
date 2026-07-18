@@ -44,6 +44,16 @@ a { text-decoration:none; }
 .cms-navigation nav { overflow-y:auto; }
 @media (max-width:700px) { .cms-navigation nav { overflow-x:auto; overflow-y:hidden; } }
 
+.toggle-field { padding:14px 0; border-top:1px solid var(--light-line); border-bottom:1px solid var(--light-line); }
+.toggle-control { display:flex; min-height:44px; align-items:center; gap:12px; cursor:pointer; }
+.toggle-control input { position:absolute; width:1px !important; height:1px !important; overflow:hidden; opacity:0; }
+.toggle-control i { position:relative; display:block; width:42px; height:24px; border:1px solid #777; background:#c8c8c2; transition:background-color 140ms ease-out, border-color 140ms ease-out; }
+.toggle-control i::after { position:absolute; top:3px; left:3px; width:16px; height:16px; background:#666; content:""; transition:transform 140ms ease-out, background-color 140ms ease-out; }
+.toggle-control input:checked + i { border-color:var(--black); background:var(--signal); }
+.toggle-control input:checked + i::after { background:var(--black); transform:translateX(18px); }
+.toggle-control input:focus-visible + i { outline:2px solid var(--signal); outline-offset:3px; }
+.toggle-control strong { color:var(--black); font:700 .54rem monospace; }
+
 .admin-tabs { display:flex; align-items:center; align-self:stretch; }
 .admin-tabs a, .admin-tabs > span { display:flex; min-width:100px; padding:0 16px; align-items:center; justify-content:center; gap:8px; border-right:1px solid var(--line); border-left:1px solid var(--line); color:var(--muted); font:700 .56rem monospace; }
 .admin-tabs a + a, .admin-tabs > span + a { border-left:0; }

@@ -63,6 +63,30 @@ export type StellarPayment = {
   explorerUrl: string;
 };
 
+export type StellarClaimableBalance = {
+  id: string;
+  reference: string;
+  status: "prepared" | "submitted" | "confirmed" | "failed" | "expired";
+  network: "testnet";
+  networkPassphrase: string;
+  source: string;
+  claimant: string;
+  assetCode: string;
+  assetIssuer?: string;
+  amount: string;
+  transaction: string;
+  transactionHash: string;
+  claimableBalanceId: string;
+  reclaimAfterSeconds: number;
+  submissionStatus?: string;
+  ledger?: number;
+  expiresAt: string;
+  submittedAt?: string;
+  confirmedAt?: string;
+  receiptUrl?: string;
+  explorerUrl: string;
+};
+
 export const STELLAR_NETWORK: StellarNetwork =
   process.env.NEXT_PUBLIC_STELLAR_NETWORK === "mainnet" ? "mainnet" : "testnet";
 

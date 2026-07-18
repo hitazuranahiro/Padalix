@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ADMIN_ENV="$ROOT_DIR/apps/admin/.env.local"
+if [[ ! -f "$ADMIN_ENV" ]]; then echo "Missing apps/admin/.env.local." >&2; exit 1; fi
+
+DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' "$ADMIN_ENV" | tail -n 1)"
+if [[ -z "$DATABASE_URL" ]]; then echo "Admin database configuration is required." >&2; exit 1; fi
+
+export DATABASE_URL
+export WORKER_ID="${WORKER_ID:-platform-worker-local}"
+export STELLAR_TESTNET_PAYMENTS_ENABLED="${STELLAR_TESTNET_PAYMENTS_ENABLED:-true}"
+export STELLAR_NETWORK="${STELLAR_NETWORK:-testnet}"
+export STELLAR_RPC_URL="${STELLAR_RPC_URL:-https://soroban-testnet.stellar.org}"
+export STELLAR_HORIZON_URL="${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}"
+export STELLAR_PAYMENT_ASSET_CODE="${STELLAR_PAYMENT_ASSET_CODE:-XLM}"
+export EMAIL_DELIVERY_ENABLED="${EMAIL_DELIVERY_ENABLED:-false}"
+
+cd "$ROOT_DIR/services/platform"
+exec go run ./cmd/worker

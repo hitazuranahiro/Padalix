@@ -13,7 +13,9 @@ import {
   WalletCards,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { CustomerExperienceLayer, type CustomerNotification } from "@/components/customer-experience-layer";
 import { can } from "@/lib/capabilities";
+import { getCustomerExperienceOrDefault } from "@/lib/customer-experience-store";
 import { platformRequest, type PlatformAccount } from "@/lib/platform";
 import { requireCustomerSession } from "@/lib/session";
 
@@ -29,12 +31,22 @@ type DashboardResponse = {
 
 export default async function Dashboard() {
   const session = await requireCustomerSession();
-  const { account, activity } = await platformRequest<DashboardResponse>(session, "/v1/dashboard");
+  const [{ account, activity }, experience] = await Promise.all([
+    platformRequest<DashboardResponse>(session, "/v1/dashboard"),
+    getCustomerExperienceOrDefault(session.user.id),
+  ]);
   const sendAllowed = can(account.verificationLevel, "transfer.send");
   const firstName = account.name.split(" ")[0];
+  const notifications: CustomerNotification[] = [
+    sendAllowed
+      ? { key: "identity:verified", label: "IDENTITY", title: "Verified account controls are active", message: "Your identity is approved and verified transfer controls are available.", href: "/verification", tone: "signal" }
+      : { key: "identity:action-required", label: "ACTION REQUIRED", title: "Verify your identity to unlock transfers", message: "Complete the secure identity check before sending money or using payout methods.", href: "/verification", tone: "signal" },
+    { key: "wallet:sandbox-ready", label: "ACCOUNT", title: "Your sandbox wallet is ready", message: `${Number(account.balance).toFixed(2)} ${account.asset} is available for testing Padalix flows.`, href: "/wallet" },
+  ];
 
   return (
     <AppShell active="/" member={{ name: account.name, level: account.verificationLevel }}>
+      <CustomerExperienceLayer firstName={firstName} initialState={experience} notifications={notifications} />
       <main className="dashboard dashboard-workspace">
         <section className="dashboard-head">
           <div>

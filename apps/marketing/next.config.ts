@@ -28,6 +28,10 @@ const contentSecurityPolicy = [
   `media-src 'self' blob:${mediaOrigin ? ` ${mediaOrigin}` : ""}`,
   "worker-src 'self' blob:",
 ].join("; ");
+const embeddedDocumentSecurityPolicy = contentSecurityPolicy.replace(
+  "frame-ancestors 'none'",
+  "frame-ancestors 'self'",
+);
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -49,6 +53,15 @@ const nextConfig: NextConfig = {
           { key: "X-DNS-Prefetch-Control", value: "off" },
           { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
+        ],
+      },
+      {
+        source: "/documents/padalix-pitch-deck.pdf",
+        headers: [
+          { key: "Content-Security-Policy", value: embeddedDocumentSecurityPolicy },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Disposition", value: "inline; filename=\"padalix-pitch-deck.pdf\"" },
+          { key: "Cache-Control", value: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800" },
         ],
       },
     ];

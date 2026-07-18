@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -11,6 +12,8 @@ import {
   WalletCards,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { AnnouncementNotice } from "@/components/announcement-notice";
+import { MarketingMotion } from "@/components/marketing-motion";
 import { SiteHeader } from "@/components/site-header";
 import { pageMetadata } from "@/lib/metadata";
 import { loadSiteContent } from "@/lib/site-content";
@@ -94,6 +97,33 @@ export default async function MarketingPage() {
             </div>
           ))}
         </section>
+
+        {siteContent.announcement.enabled === "true" && (
+          <section className="announcement-spotlight" aria-labelledby="announcement-title">
+            <div className="announcement-spotlight-image" data-reveal>
+              <Image
+                src={mediaUrl(siteContent.announcement.imageUrl)}
+                alt="APAC Stellar Demo Day Philippines event poster"
+                fill
+                sizes="(max-width: 900px) 100vw, 52vw"
+              />
+            </div>
+            <div className="announcement-spotlight-copy" data-reveal style={{ "--reveal-delay": "90ms" } as CSSProperties}>
+              <div className="section-number mono">00 / ANNOUNCEMENT</div>
+              <p className="eyebrow mono">{siteContent.announcement.eyebrow}</p>
+              <h2 id="announcement-title">{siteContent.announcement.title}</h2>
+              <p>{siteContent.announcement.summary}</p>
+              <div className="announcement-spotlight-meta mono">
+                <span>{siteContent.announcement.dateLabel}</span>
+                <span>{siteContent.announcement.locationLabel}</span>
+              </div>
+              <Link className="text-action" href={siteContent.announcement.actionHref}>
+                <span>{siteContent.announcement.actionLabel}</span>
+                <ArrowRight aria-hidden="true" size={16} />
+              </Link>
+            </div>
+          </section>
+        )}
 
         <section className="system-section" id="system" aria-labelledby="system-title">
           <div className="section-rail mono"><span>02</span><span>THE SYSTEM</span></div>
@@ -204,6 +234,26 @@ export default async function MarketingPage() {
           </figure>
         </section>
 
+        <section className="proof-section" aria-labelledby="proof-title">
+          <header data-reveal>
+            <div className="section-number mono">03B / PRODUCT REALITY</div>
+            <div>
+              <p className="eyebrow mono">{siteContent.proof.eyebrow}</p>
+              <h2 id="proof-title">{siteContent.proof.title}</h2>
+              <p>{siteContent.proof.body}</p>
+            </div>
+          </header>
+          <div className="proof-grid">
+            {siteContent.proof.items.map((item, index) => (
+              <article key={item.index} data-reveal style={{ "--reveal-delay": `${index * 70}ms` } as CSSProperties}>
+                <span className="mono">{item.index}</span>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="infrastructure-section" id="infrastructure" aria-labelledby="infrastructure-title">
           <div className="infra-intro">
             <div className="section-number mono">04 / INFRASTRUCTURE</div>
@@ -250,10 +300,14 @@ export default async function MarketingPage() {
         <Link href="#top" aria-label="Padalix home"><Brand /></Link>
         <p>{siteContent.footer.tagline}</p>
         <div className="footer-links">
-          <Link href="#system">System</Link><Link href="#product">Product</Link><Link href="/about">About</Link><Link href="/presentation">Presentation</Link><Link href="/docs">Docs</Link><Link href="/help">Help</Link><a href={appUrl}>Launch app</a>
+          <Link href="#system">System</Link><Link href="#product">Product</Link><Link href="/about">About</Link><Link href="/presentation">Presentation</Link><Link href="/announcements">Announcements</Link><Link href="/docs">Docs</Link><Link href="/help">Help</Link><a href={appUrl}>Launch app</a>
         </div>
         <p className="mono">© 2026 PADALIX / ALL SYSTEMS IN DEVELOPMENT</p>
       </footer>
+      {siteContent.announcement.enabled === "true" && (
+        <AnnouncementNotice announcement={{ ...siteContent.announcement, imageUrl: mediaUrl(siteContent.announcement.imageUrl) }} />
+      )}
+      <MarketingMotion />
     </>
   );
 }

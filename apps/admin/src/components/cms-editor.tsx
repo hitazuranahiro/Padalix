@@ -5,9 +5,11 @@ import type { SiteContent } from "@padalix/content";
 import { Check, ExternalLink, FileText, Monitor, Save, Send, Smartphone, Upload } from "lucide-react";
 
 const sections = [
+  { id: "announcement", index: "00", label: "Announcement" },
   { id: "hero", index: "01", label: "Hero" },
   { id: "system", index: "02", label: "System" },
   { id: "product", index: "03", label: "Control surface" },
+  { id: "proof", index: "03B", label: "MVP proof" },
   { id: "infrastructure", index: "04", label: "Infrastructure" },
   { id: "mission", index: "05", label: "Mission" },
   { id: "access", index: "06", label: "Final action" },
@@ -18,9 +20,24 @@ const sections = [
 ] as const;
 
 type SectionId = typeof sections[number]["id"];
-type Field = { label: string; path: string; multiline?: boolean };
+type Field = { label: string; path: string; multiline?: boolean; kind?: "toggle" };
 
 const fields: Record<SectionId, Field[]> = {
+  announcement: [
+    { label: "Show announcement", path: "announcement.enabled", kind: "toggle" },
+    { label: "Announcement slug", path: "announcement.slug" },
+    { label: "Eyebrow", path: "announcement.eyebrow" },
+    { label: "Headline", path: "announcement.title", multiline: true },
+    { label: "Summary", path: "announcement.summary", multiline: true },
+    { label: "Date and time", path: "announcement.dateLabel" },
+    { label: "Location", path: "announcement.locationLabel" },
+    { label: "Status label", path: "announcement.statusLabel" },
+    { label: "Featured image URL", path: "announcement.imageUrl" },
+    { label: "Gallery image 1 URL", path: "announcement.galleryImageOne" },
+    { label: "Gallery image 2 URL", path: "announcement.galleryImageTwo" },
+    { label: "Action label", path: "announcement.actionLabel" },
+    { label: "Action URL", path: "announcement.actionHref" },
+  ],
   hero: [
     { label: "Eyebrow", path: "hero.eyebrow" },
     { label: "Headline line 1", path: "hero.title.0" },
@@ -46,6 +63,19 @@ const fields: Record<SectionId, Field[]> = {
     { label: "Feature 2", path: "product.features.1" },
     { label: "Feature 3", path: "product.features.2" },
     { label: "Feature 4", path: "product.features.3" },
+  ],
+  proof: [
+    { label: "Eyebrow", path: "proof.eyebrow" },
+    { label: "Section title", path: "proof.title", multiline: true },
+    { label: "Section introduction", path: "proof.body", multiline: true },
+    { label: "Proof 1 title", path: "proof.items.0.title" },
+    { label: "Proof 1 detail", path: "proof.items.0.body", multiline: true },
+    { label: "Proof 2 title", path: "proof.items.1.title" },
+    { label: "Proof 2 detail", path: "proof.items.1.body", multiline: true },
+    { label: "Proof 3 title", path: "proof.items.2.title" },
+    { label: "Proof 3 detail", path: "proof.items.2.body", multiline: true },
+    { label: "Proof 4 title", path: "proof.items.3.title" },
+    { label: "Proof 4 detail", path: "proof.items.3.body", multiline: true },
   ],
   infrastructure: [
     { label: "Section title", path: "infrastructure.title", multiline: true },
@@ -155,9 +185,11 @@ const fields: Record<SectionId, Field[]> = {
 };
 
 function DraftPreview({ active, content }: { active: SectionId; content: SiteContent }) {
+  if (active === "announcement") return <><small>{content.announcement.eyebrow}</small><h2>{content.announcement.title}</h2><p>{content.announcement.summary}</p><div className="preview-items"><span>{content.announcement.dateLabel}<strong>{content.announcement.locationLabel}</strong></span><span>STATUS<strong>{content.announcement.statusLabel}</strong></span></div></>;
   if (active === "hero") return <><small>{content.hero.eyebrow}</small><h2>{content.hero.title.map((line) => <span key={line}>{line}</span>)}</h2><p>{content.hero.body}</p><button type="button">{content.hero.primaryAction}</button></>;
   if (active === "system") return <><small>{content.system.eyebrow}</small><h2>{content.system.title}</h2><p>{content.system.body}</p><div className="preview-items">{content.system.steps.map((step) => <span key={step.index}>{step.index}<strong>{step.title}</strong></span>)}</div></>;
   if (active === "product") return <><small>{content.product.eyebrow}</small><h2>{content.product.title}</h2><p>{content.product.body}</p><div className="preview-items">{content.product.features.map((feature, index) => <span key={feature}>0{index + 1}<strong>{feature}</strong></span>)}</div></>;
+  if (active === "proof") return <><small>{content.proof.eyebrow}</small><h2>{content.proof.title}</h2><p>{content.proof.body}</p><div className="preview-items">{content.proof.items.slice(0, 3).map((item) => <span key={item.index}>{item.index}<strong>{item.title}</strong></span>)}</div></>;
   if (active === "infrastructure") return <><small>04 / INFRASTRUCTURE</small><h2>{content.infrastructure.title}</h2><p>{content.infrastructure.body}</p><div className="preview-items">{content.infrastructure.layers.map((layer) => <span key={layer.label}>{layer.label}<strong>{layer.title}</strong></span>)}</div></>;
   if (active === "mission") return <><small>05 / WHY PADALIX</small><h2>{content.mission.statement}</h2><p>{content.mission.body}</p><div className="preview-metric"><strong>{content.mission.metric}</strong><span>{content.mission.metricLabel}</span></div></>;
   if (active === "access") return <><small>{content.access.eyebrow}</small><h2>{content.access.title}</h2><p>{content.access.body}</p><button type="button">{content.access.action}</button></>;
@@ -185,7 +217,8 @@ export function CmsEditor({ initialContent, publishedAt }: { initialContent: Sit
   const [active, setActive] = useState<SectionId>("hero");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [state, setState] = useState<"saved" | "dirty" | "saving" | "published">("saved");
-  const [uploadState, setUploadState] = useState("PDF / READY FOR UPLOAD");
+  const [pdfUploadState, setPdfUploadState] = useState("PDF / READY FOR UPLOAD");
+  const [announcementUploadState, setAnnouncementUploadState] = useState("IMAGES / READY FOR UPLOAD");
   const activeSection = useMemo(() => sections.find((section) => section.id === active)!, [active]);
 
   async function persist(publish: boolean) {
@@ -195,10 +228,27 @@ export function CmsEditor({ initialContent, publishedAt }: { initialContent: Sit
     setState(publish ? "published" : "saved");
   }
 
+  async function uploadAnnouncementImages(files: FileList | null) {
+    if (!files?.length) return;
+    setAnnouncementUploadState(`UPLOADING / ${files.length} IMAGE${files.length === 1 ? "" : "S"}`);
+    const form = new FormData();
+    Array.from(files).slice(0, 3).forEach((file) => form.append("files", file));
+    const response = await fetch("/api/assets/announcement", { method: "POST", body: form });
+    const result = await response.json() as { urls?: string[]; error?: string };
+    if (!response.ok || !result.urls?.length) {
+      setAnnouncementUploadState(result.error ?? "UPLOAD FAILED");
+      return;
+    }
+    const paths = ["announcement.imageUrl", "announcement.galleryImageOne", "announcement.galleryImageTwo"];
+    setContent((current) => result.urls!.reduce((next, url, index) => writePath(next, paths[index], url), current));
+    setAnnouncementUploadState(`UPLOADED / ${result.urls.length} IMAGE${result.urls.length === 1 ? "" : "S"} / PUBLISH TO APPLY`);
+    setState("dirty");
+  }
+
   return <div className="cms-workspace">
     <aside className="cms-navigation"><p>SITE CONTENT</p><nav aria-label="Website sections">{sections.map((section) => <button className={active === section.id ? "active" : ""} type="button" key={section.id} onClick={() => setActive(section.id)}><span>{section.index}</span><strong>{section.label}</strong></button>)}</nav><div className="cms-navigation-footer"><span>LAST PUBLISHED</span><strong>{publishedAt ? new Date(publishedAt).toLocaleString() : "NOT YET PUBLISHED"}</strong><a href={process.env.NEXT_PUBLIC_MARKETING_URL ?? "http://localhost:3000"} target="_blank" rel="noreferrer">VIEW WEBSITE <ExternalLink size={14} /></a></div></aside>
 
-    <section className="content-editor"><header><div><p>CONTENT WORKSPACE / {activeSection.index}</p><h1>{activeSection.label}</h1></div><span className={`document-state ${state}`}><i />{state.toUpperCase()}</span></header><div className="editor-fields">{fields[active].map((field) => <label key={field.path}><span>{field.label}</span>{field.multiline ? <textarea rows={3} value={readPath(content, field.path)} onChange={(event) => { setContent(writePath(content, field.path, event.target.value)); setState("dirty"); }} /> : <input value={readPath(content, field.path)} onChange={(event) => { setContent(writePath(content, field.path, event.target.value)); setState("dirty"); }} />}</label>)}{active === "presentation" && <div className="pdf-upload"><div><FileText size={20} /><span><strong>PRESENTATION PDF</strong><small>{uploadState}</small></span></div><label className="upload-command"><Upload size={16} /> UPLOAD PDF<input type="file" accept="application/pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setUploadState("UPLOADING / " + file.name); const form = new FormData(); form.set("file", file); const response = await fetch("/api/assets/presentation", { method: "PUT", body: form }); const result = await response.json() as { url?: string; error?: string }; if (!response.ok || !result.url) { setUploadState(result.error ?? "UPLOAD FAILED"); return; } setContent(writePath(content, "presentation.documentUrl", result.url)); setUploadState("UPLOADED / PUBLISH TO APPLY"); setState("dirty"); }} /></label></div>}</div></section>
+    <section className="content-editor"><header><div><p>CONTENT WORKSPACE / {activeSection.index}</p><h1>{activeSection.label}</h1></div><span className={`document-state ${state}`}><i />{state.toUpperCase()}</span></header><div className="editor-fields">{fields[active].map((field) => <label key={field.path} className={field.kind === "toggle" ? "toggle-field" : undefined}><span>{field.label}</span>{field.kind === "toggle" ? <span className="toggle-control"><input type="checkbox" checked={readPath(content, field.path) === "true"} onChange={(event) => { setContent(writePath(content, field.path, String(event.target.checked))); setState("dirty"); }} /><i /><strong>{readPath(content, field.path) === "true" ? "VISIBLE" : "HIDDEN"}</strong></span> : field.multiline ? <textarea rows={3} value={readPath(content, field.path)} onChange={(event) => { setContent(writePath(content, field.path, event.target.value)); setState("dirty"); }} /> : <input value={readPath(content, field.path)} onChange={(event) => { setContent(writePath(content, field.path, event.target.value)); setState("dirty"); }} />}</label>)}{active === "announcement" && <div className="pdf-upload"><div><Upload size={20} /><span><strong>ANNOUNCEMENT IMAGES</strong><small>{announcementUploadState}</small></span></div><label className="upload-command"><Upload size={16} /> UPLOAD 1-3 IMAGES<input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={(event) => void uploadAnnouncementImages(event.target.files)} /></label></div>}{active === "presentation" && <div className="pdf-upload"><div><FileText size={20} /><span><strong>PRESENTATION PDF</strong><small>{pdfUploadState}</small></span></div><label className="upload-command"><Upload size={16} /> UPLOAD PDF<input type="file" accept="application/pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; setPdfUploadState("UPLOADING / " + file.name); const form = new FormData(); form.set("file", file); const response = await fetch("/api/assets/presentation", { method: "PUT", body: form }); const result = await response.json() as { url?: string; error?: string }; if (!response.ok || !result.url) { setPdfUploadState(result.error ?? "UPLOAD FAILED"); return; } setContent(writePath(content, "presentation.documentUrl", result.url)); setPdfUploadState("UPLOADED / PUBLISH TO APPLY"); setState("dirty"); }} /></label></div>}</div></section>
 
     <aside className="cms-preview"><header><div><span>LIVE DRAFT / {activeSection.index}</span><strong>{device.toUpperCase()} PREVIEW</strong></div><div className="device-control"><button className={device === "desktop" ? "active" : ""} type="button" title="Desktop preview" aria-label="Desktop preview" onClick={() => setDevice("desktop")}><Monitor size={16} /></button><button className={device === "mobile" ? "active" : ""} type="button" title="Mobile preview" aria-label="Mobile preview" onClick={() => setDevice("mobile")}><Smartphone size={16} /></button></div></header><div className={`preview-frame ${device}`}><div className={`preview-site preview-${active}`}><div className="preview-nav"><b>PADALIX</b><span>ABOUT&nbsp;&nbsp; PRESENTATION&nbsp;&nbsp; APP</span></div><div className="preview-content"><DraftPreview active={active} content={content} /></div><div className="preview-signal"><Check size={14} /> {active.toUpperCase()} / DRAFT</div></div></div><footer><button className="save-command" type="button" disabled={state === "saving"} onClick={() => persist(false)}><Save size={17} /> SAVE DRAFT</button><button className="publish-command" type="button" disabled={state === "saving"} onClick={() => persist(true)}><Send size={17} /> PUBLISH</button></footer></aside>
   </div>;

@@ -74,9 +74,17 @@ func withHTTPBoundary(next http.Handler) http.Handler {
 		slog.Info("http_request",
 			"correlation_id", correlationID,
 			"method", r.Method,
-			"path", r.URL.Path,
+			"path", safeRequestPath(r.URL.Path),
 			"status", status,
 			"duration_ms", time.Since(startedAt).Milliseconds(),
 		)
 	})
+}
+
+func safeRequestPath(path string) string {
+	const ganapWebhookPrefix = "/internal/connectors/ganap/webhooks/"
+	if strings.HasPrefix(path, ganapWebhookPrefix) {
+		return ganapWebhookPrefix + "[redacted]"
+	}
+	return path
 }

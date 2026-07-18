@@ -5,6 +5,7 @@ export const siteContent = {
       { label: "Product", href: "#product" },
       { label: "About", href: "/about" },
       { label: "Presentation", href: "/presentation" },
+      { label: "Announcements", href: "/announcements" },
       { label: "Docs", href: "/docs" },
       { label: "Help", href: "/help" }
     ],
@@ -26,6 +27,21 @@ export const siteContent = {
     { value: "1 → MANY", label: "FAMILY DISTRIBUTION" },
     { value: "STELLAR", label: "SETTLEMENT LAYER" }
   ],
+  announcement: {
+    enabled: "true",
+    slug: "apac-stellar-demo-day-2026",
+    eyebrow: "PADALIX / LIVE UPDATE",
+    title: "Padalix is at APAC Stellar Demo Day.",
+    summary: "We are presenting the Padalix testnet MVP at the APAC Stellar Hackathon Demo Day in Manila. The project will be reviewed by the judging panel later today.",
+    dateLabel: "JULY 18 / 3:00-8:00 PM",
+    locationLabel: "GCASH OFFICE / MANILA",
+    statusLabel: "PRESENTING TODAY",
+    imageUrl: "/images/announcements/apac-stellar-demo-day.webp",
+    galleryImageOne: "/images/announcements/apac-stellar-judges-01.webp",
+    galleryImageTwo: "/images/announcements/apac-stellar-judges-02.webp",
+    actionLabel: "View event update",
+    actionHref: "/announcements"
+  },
   system: {
     eyebrow: "ONE SEND / MULTIPLE OUTCOMES",
     title: "Built for the way families actually move money.",
@@ -59,6 +75,17 @@ export const siteContent = {
     title: "Every number visible. Every action deliberate.",
     body: "Padalix makes the amount, fee, rate, delivery method, and expected arrival clear before the sender moves forward.",
     features: ["Transparent quotes", "Family distribution rules", "Claimable receiving", "End-to-end status"]
+  },
+  proof: {
+    eyebrow: "MVP / WORKING ON TESTNET",
+    title: "Built past the mockup.",
+    body: "Padalix now connects the customer interface to signed Stellar transactions, durable reconciliation, programmable receiving, and verifiable contract execution.",
+    items: [
+      { index: "01", title: "Wallet-signed sends", body: "Prepare, sign, submit, and reconcile a real Stellar testnet payment without storing the customer seed." },
+      { index: "02", title: "Claimable receiving", body: "Create on-chain claimable balances with immediate recipient access and delayed sender recovery." },
+      { index: "03", title: "Family distribution", body: "Save allocation plans, execute an atomic sandbox distribution, and issue a receipt for every recipient leg." },
+      { index: "04", title: "Milestone escrow", body: "Use the deployed Soroban testnet contract for sequential releases and explicit deadline refunds." }
+    ]
   },
   infrastructure: {
     title: "Crypto underneath. Clarity above.",

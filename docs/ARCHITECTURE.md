@@ -324,7 +324,8 @@ MVP behavior:
 - Persist Padalix's own transaction history because RPC is not a long-term indexer.
 - Use path payments only when a viable liquidity path exists.
 - Provide a deterministic demo quote fallback that is labeled as simulated.
-- Give claimable balances a Padalix recovery claimant and explicit expiry predicates.
+- Give claimable balances an explicit sender recovery claimant and a delayed
+  relative-time predicate. Padalix must not control the recovery key.
 
 ### Signing decision
 

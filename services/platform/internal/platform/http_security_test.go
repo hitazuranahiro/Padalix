@@ -32,6 +32,16 @@ func TestHTTPBoundaryPreservesValidCorrelationID(t *testing.T) {
 	}
 }
 
+func TestSafeRequestPathRedactsGanapWebhookSecret(t *testing.T) {
+	got := safeRequestPath("/internal/connectors/ganap/webhooks/sensitive-path-secret")
+	if got != "/internal/connectors/ganap/webhooks/[redacted]" {
+		t.Fatalf("webhook path was not redacted: %q", got)
+	}
+	if got := safeRequestPath("/v1/funding-checkouts"); got != "/v1/funding-checkouts" {
+		t.Fatalf("ordinary path changed: %q", got)
+	}
+}
+
 func TestHTTPBoundaryReplacesInvalidCorrelationIDAndSetsSecurityHeaders(t *testing.T) {
 	handler := withHTTPBoundary(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/pdf")

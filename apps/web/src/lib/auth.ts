@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { passkey } from "@better-auth/passkey";
 import { nextCookies } from "better-auth/next-js";
 import { createHash } from "node:crypto";
-import { Pool } from "pg";
+import { customerDatabase } from "@/lib/database";
 
 const authBaseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:3002";
 const authURL = new URL(authBaseURL);
@@ -12,15 +12,9 @@ const trustedOrigins = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "http://local
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-const authDatabase = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  options: "-c search_path=customer_auth",
-  max: 5,
-});
-
 async function enqueueAuthEmail(input: { email: string; name: string; template: string; payload: Record<string, string> }) {
   const digest = createHash("sha256").update(`${input.template}:${JSON.stringify(input.payload)}`).digest("hex");
-  await authDatabase.query(
+  await customerDatabase.query(
     `insert into notification.outbox(member_id,category,template_key,recipient,payload,idempotency_key)
      values((select id from identity.member where lower(email)=lower($1) limit 1),'security',$2,lower($1),$3::jsonb,$4)
      on conflict(idempotency_key) do nothing`,
@@ -32,7 +26,7 @@ export const auth = betterAuth({
   appName: "Padalix",
   baseURL: authBaseURL,
   secret: process.env.BETTER_AUTH_SECRET,
-  database: authDatabase,
+  database: customerDatabase,
   trustedOrigins,
   emailAndPassword: {
     enabled: true,

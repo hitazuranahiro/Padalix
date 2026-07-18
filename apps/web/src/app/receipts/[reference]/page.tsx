@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowUpRight, CheckCircle2, Download, FileJson, Landmark, ReceiptText } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { ClaimLinkCreator } from "@/components/claim-link-creator";
 import { PlatformError, platformRequest, type PlatformAccount, type TransferReceipt } from "@/lib/platform";
 import { requireCustomerSession } from "@/lib/session";
 import styles from "./receipt.module.css";
@@ -116,6 +117,8 @@ export default async function ReceiptPage({ params }: PageProps) {
             {receipt.stellarHorizonUrl ? <a href={receipt.stellarHorizonUrl} target="_blank" rel="noreferrer">Horizon record <ArrowUpRight size={15} /></a> : null}
           </div>
         </section>
+
+        {receipt.status === "confirmed" ? <ClaimLinkCreator reference={receipt.reference} /> : null}
 
         <footer className={styles.digest}>
           <span>RECEIPT SHA-256</span>

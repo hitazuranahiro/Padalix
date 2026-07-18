@@ -283,3 +283,6 @@ product mail is suppressed unless the member preference explicitly opts in.
 Build the persistent worker container with `Dockerfile.worker`. It exposes no
 HTTP port and should run as a private Easypanel App service with one replica
 initially and automatic restart enabled.
+
+The complete API, worker, and SES deployment procedure is documented in
+[`docs/EASYPANEL_WORKER_AND_SES.md`](../../docs/EASYPANEL_WORKER_AND_SES.md).

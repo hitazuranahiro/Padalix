@@ -98,33 +98,6 @@ export default async function MarketingPage() {
           ))}
         </section>
 
-        {siteContent.announcement.enabled === "true" && (
-          <section className="announcement-spotlight" aria-labelledby="announcement-title">
-            <div className="announcement-spotlight-image" data-reveal>
-              <Image
-                src={mediaUrl(siteContent.announcement.imageUrl)}
-                alt="APAC Stellar Demo Day Philippines event poster"
-                fill
-                sizes="(max-width: 900px) 100vw, 52vw"
-              />
-            </div>
-            <div className="announcement-spotlight-copy" data-reveal style={{ "--reveal-delay": "90ms" } as CSSProperties}>
-              <div className="section-number mono">00 / ANNOUNCEMENT</div>
-              <p className="eyebrow mono">{siteContent.announcement.eyebrow}</p>
-              <h2 id="announcement-title">{siteContent.announcement.title}</h2>
-              <p>{siteContent.announcement.summary}</p>
-              <div className="announcement-spotlight-meta mono">
-                <span>{siteContent.announcement.dateLabel}</span>
-                <span>{siteContent.announcement.locationLabel}</span>
-              </div>
-              <Link className="text-action" href={siteContent.announcement.actionHref}>
-                <span>{siteContent.announcement.actionLabel}</span>
-                <ArrowRight aria-hidden="true" size={16} />
-              </Link>
-            </div>
-          </section>
-        )}
-
         <section className="system-section" id="system" aria-labelledby="system-title">
           <div className="section-rail mono"><span>02</span><span>THE SYSTEM</span></div>
           <div className="section-main">

@@ -127,8 +127,8 @@ export const siteContent = {
     eyebrow: "BUILD ON STELLAR PHILIPPINES / 2026",
     title: "Crypto to cash, instantly connected.",
     introduction: "A mobile-first payment system that makes stablecoin settlement usable for real families, freelancers, businesses, and recipients without bank accounts.",
-    documentUrl: "/documents/padalix-idea-submission.pdf",
-    documentLabel: "PADALIX IDEA SUBMISSION / CHECKPOINT 1",
+    documentUrl: "/documents/padalix-pitch-deck.pdf",
+    documentLabel: "PADALIX PITCH DECK / DEMO DAY",
     flow: [
       { index: "01", title: "Load", body: "Fund a Padalix wallet with USDC or a PHP stablecoin." },
       { index: "02", title: "Route", body: "Select recipients and payout methods while Stellar finds the liquidity path." },

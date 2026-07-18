@@ -1,50 +1,246 @@
-# Padalix
+<p align="center">
+  <a href="https://padalix.com">
+    <img src="apps/marketing/public/images/padalix-social-logo.png" alt="Padalix logo" width="148" />
+  </a>
+</p>
 
-Padalix is a Stellar-powered remittance platform designed to connect stablecoin settlement with practical recipient payout experiences for Filipino families.
+<h1 align="center">Padalix</h1>
 
-The current workspace contains the paste-ready [project description](./PROJECT_DESCRIPTION.md), including short and full versions, presentation copy, MVP boundaries, Stellar integration details, roadmap, metadata, and supporting sources.
+<p align="center"><strong>One gateway for crypto and cash.</strong></p>
 
-## Engineering plan
+<p align="center">
+  A PWA-first remittance and settlement platform connecting transparent payment
+  experiences with Stellar-powered infrastructure.
+</p>
 
-- [System architecture](./docs/ARCHITECTURE.md)
-- [MVP delivery plan](./docs/DELIVERY_PLAN.md)
-- [International KYC and account tiers](./docs/KYC_AUTOMATION_AND_ACCOUNT_TIERS.md)
-- [Notifications and compliance boundary](./docs/NOTIFICATIONS_AND_COMPLIANCE.md)
-- [Deployment runbook](./docs/DEPLOYMENT.md)
-- [Production MVP and wallet connector plan](./docs/PRODUCTION_MVP.md)
+<p align="center">
+  <a href="https://padalix.com"><strong>Website</strong></a>
+  &nbsp;&middot;&nbsp;
+  <a href="https://app.padalix.com">Launch App</a>
+  &nbsp;&middot;&nbsp;
+  <a href="https://padalix.com/presentation">Presentation</a>
+  &nbsp;&middot;&nbsp;
+  <a href="https://padalix.com/docs">Documentation</a>
+  &nbsp;&middot;&nbsp;
+  <a href="https://padalix.com/status">System Status</a>
+</p>
 
-## Administrator CMS
+<p align="center">
+  <a href="https://github.com/hitazuranahiro/Padalix/actions/workflows/ci.yml">
+    <img src="https://github.com/hitazuranahiro/Padalix/actions/workflows/ci.yml/badge.svg" alt="Padalix CI status" />
+  </a>
+</p>
 
-The production CMS foundation now lives in `apps/admin` and is designed for `admin.padalix.com`. It uses Better Auth with PostgreSQL sessions and administrator roles, stores separate draft and published documents, and records administrative mutations in an append-only audit table.
+---
 
-Public content routes include `/about`, `/presentation`, `/docs`, and `/help`. Their content is part of the shared CMS document and follows the same draft and publish workflow as the landing page.
+## Overview
 
-The Help Center includes a secure support ticket workflow. Customers can create a categorized case, retain a private tracking link, follow status changes, and reply without an account. Administrators manage the queue at `http://localhost:3001/support` with status, priority, assignment, SLA, public replies, internal notes, and an immutable activity history.
+Padalix is designed to make cross-border value movement clear, trackable, and
+accessible for Filipino families. The product combines an installable customer
+PWA, an operations and compliance back office, a Go platform API, PostgreSQL,
+and Stellar testnet integrations in one modular repository.
 
-The back office also includes a KYC review desk at `http://localhost:3001/kyc` and administrator-only reviewer provisioning at `http://localhost:3001/team`. Customer identities remain separate from staff authentication. See [Notifications and Compliance Boundary](./docs/NOTIFICATIONS_AND_COMPLIANCE.md) for member email routing, KYC controls, and the future payment-gateway boundary.
+The current release is an MVP and controlled demonstration environment. Stellar
+flows run on testnet unless explicitly configured otherwise, and funding or
+payout connectors remain disabled until their operational, security, and
+regulatory requirements are satisfied.
 
-Local commands:
+## Product Surfaces
 
-```bash
-pnpm install
-docker compose up -d
-pnpm db:migrate
-pnpm dev:marketing
-pnpm dev:admin
-pnpm dev:platform
-pnpm dev:web
+| Surface | Production URL | Responsibility |
+| --- | --- | --- |
+| Marketing | [padalix.com](https://padalix.com) | Product pages, announcements, documentation, support, and public status |
+| Customer PWA | [app.padalix.com](https://app.padalix.com) | Accounts, identity verification, recipients, transfers, wallets, claims, and receipts |
+| Admin and CMS | [admin.padalix.com](https://admin.padalix.com) | Content, support, KYC review, service operations, incidents, and audit history |
+| Platform API | [api.padalix.com](https://api.padalix.com/health) | Authoritative business rules, persistence, Stellar orchestration, and background jobs |
+
+## Current Capabilities
+
+| Domain | What is implemented | Current boundary |
+| --- | --- | --- |
+| Customer experience | Responsive PWA, onboarding, profile, settings, notifications, passkeys, and session controls | Web and installed PWA |
+| Transfers | Server-generated quotes, recipients, idempotent transfer records, receipts, and exports | Sandbox and Stellar testnet |
+| Stellar | External-wallet linking, signed testnet payments, reconciliation, and claimable balances | Non-custodial testnet flow |
+| Family distribution | Saved distribution plans and multi-recipient execution | MVP orchestration |
+| Identity and compliance | Tiered account capabilities, KYC review, risk signals, manual decisions, and audit events | Human approval remains authoritative |
+| Operations | Support tickets, notification outbox, status monitoring, incidents, and service health | Persistent worker required |
+| Content | Draft and publish CMS, announcements, media uploads, legal content, help, and presentation pages | Restricted administrator access |
+| Smart contracts | Soroban milestone escrow contract, tests, deployment metadata, and audit notes | Prototype; not a production custody product |
+| Funding connector | Ganap PHP checkout adapter with signed webhook reconciliation | Disabled by default; not a payout rail |
+
+## Architecture
+
+Padalix uses separate deployable surfaces around a shared platform and database.
+Business rules remain in the Go API; the browser applications own presentation,
+session-aware interaction, and first-party API boundaries.
+
+```mermaid
+flowchart LR
+    Visitor["Public visitor"] --> Marketing["Marketing site"]
+    Customer["Customer"] --> PWA["Customer PWA"]
+    Operator["Authorized operator"] --> Admin["Admin and CMS"]
+
+    Marketing --> CMS["Published CMS content"]
+    PWA --> Auth["Better Auth"]
+    Admin --> Auth
+    PWA --> API["Go platform API"]
+    Admin --> API
+
+    Auth --> DB[("PostgreSQL")]
+    API --> DB
+    Worker["Go worker"] --> DB
+    API --> Stellar["Stellar network"]
+    Worker --> Stellar
+    Admin --> Storage["Private S3-compatible storage"]
+    Worker --> Email["Transactional email"]
 ```
 
-See `apps/admin/README.md` for PostgreSQL, first-administrator, and Vercel setup.
+## Repository Structure
 
-## Next.js marketing application
+```text
+Padalix/
+|-- apps/
+|   |-- marketing/            # Public Next.js website
+|   |-- web/                  # Customer Next.js PWA and Better Auth
+|   `-- admin/                # Administrator CMS and operations console
+|-- services/
+|   `-- platform/             # Go API and persistent worker
+|-- contracts/
+|   `-- milestone-escrow/     # Soroban contract and tests
+|-- packages/
+|   `-- content/              # Shared typed public content
+|-- scripts/                  # Migrations, local launchers, checks, and seed data
+|-- docs/                     # Architecture, deployment, compliance, and runbooks
+`-- docker-compose.yml        # Local PostgreSQL
+```
 
-The Vercel-ready marketing application is now located in [`apps/marketing`](./apps/marketing). It is deployed separately from the future customer PWA and links to that product through `NEXT_PUBLIC_APP_URL`.
+## Technology
 
-For Vercel, use `apps/marketing` as the marketing project root and `padalix.com` as its production domain.
+- **Frontend:** Next.js 16, React 19, TypeScript
+- **Authentication:** Better Auth with separate customer and administrator sessions
+- **Platform:** Go 1.25, `net/http`, `pgx`
+- **Database:** PostgreSQL with versioned SQL migrations
+- **Network:** Stellar SDK, Horizon, RPC, and Soroban
+- **Storage:** S3-compatible private evidence and public media storage
+- **Email:** Amazon SES through the persistent Go worker
+- **Delivery:** Vercel for Next.js surfaces; container runtime for the API and worker
 
-## Customer PWA
+## Local Development
 
-The customer application lives in [`apps/web`](./apps/web) and runs separately at `app.padalix.com`. It now includes customer Better Auth sessions, PostgreSQL-backed sandbox accounts and wallets, exact server-generated quotes, saved recipients, verified-only idempotent transfers, activity history, account capability gates, and international identity verification. The standalone Go service is in [`services/platform`](./services/platform).
+### Prerequisites
 
-KYC submissions create cases in the protected reviewer queue through a server-only ingestion proxy. Captured image bytes will move to private object storage when signed uploads are connected; the current handoff records identity fields and pending evidence metadata. Money movement is an explicit sandbox ledger and is not a connection to a licensed payment rail.
+- Node.js 22
+- pnpm 11.7
+- Go 1.25
+- Docker with Compose
+- PostgreSQL client tools (`psql`)
+- Rust and Cargo only when working on the Soroban contract
+
+### Setup
+
+```bash
+git clone https://github.com/hitazuranahiro/Padalix.git
+cd Padalix
+pnpm install
+docker compose up -d postgres
+```
+
+Copy `apps/admin/.env.example` to `apps/admin/.env.local`, replace every
+placeholder secret, and point `DATABASE_URL` to the local Compose database:
+
+```dotenv
+DATABASE_URL=postgresql://padalix:padalix-local-only@127.0.0.1:5432/padalix
+```
+
+Apply the database migrations:
+
+```bash
+pnpm db:migrate
+```
+
+Start each runtime in a separate terminal:
+
+```bash
+pnpm dev:marketing   # http://localhost:3000
+pnpm dev:admin       # http://localhost:3001
+pnpm dev:web         # http://localhost:3002
+pnpm dev:platform    # http://localhost:8080
+pnpm dev:worker
+```
+
+Environment templates are available in:
+
+- [`apps/marketing/.env.example`](apps/marketing/.env.example)
+- [`apps/web/.env.example`](apps/web/.env.example)
+- [`apps/admin/.env.example`](apps/admin/.env.example)
+- [`services/platform/.env.example`](services/platform/.env.example)
+
+Never commit real credentials. Rotate any credential that has been exposed in
+logs, screenshots, chat, or version history.
+
+## Verification
+
+Run the repository checks before opening a pull request:
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm build
+
+cd services/platform
+go test -race ./...
+go vet ./...
+
+cd ../../contracts/milestone-escrow
+cargo test
+```
+
+CI also validates migration replay, secret scanning, and production dependency
+advisories.
+
+## Deployment
+
+The three Next.js applications are deployed as separate Vercel projects. The Go
+API and worker require a persistent container runtime and access to the same
+PostgreSQL database.
+
+Before enabling production enforcement or external connectors:
+
+1. Apply every migration in order.
+2. Confirm database TLS and least-privilege credentials.
+3. Deploy and verify the persistent worker.
+4. Configure private evidence storage and transactional email.
+5. Keep mainnet, automatic compliance enforcement, and connectors disabled
+   until their release checklists are complete.
+
+See the [deployment guide](docs/DEPLOYMENT.md), [operations runbook](docs/OPERATIONS_RUNBOOK.md),
+and [release checklist](docs/RELEASE_CHECKLIST.md).
+
+## Documentation
+
+- [Project description](PROJECT_DESCRIPTION.md)
+- [System architecture](docs/ARCHITECTURE.md)
+- [MVP delivery plan](docs/DELIVERY_PLAN.md)
+- [Production MVP plan](docs/PRODUCTION_MVP.md)
+- [Mainnet pilot controls](docs/MAINNET_PILOT.md)
+- [KYC and AML design](docs/IN_HOUSE_KYC_AML.md)
+- [KYC evidence storage](docs/KYC_EVIDENCE_STORAGE.md)
+- [Notifications and compliance](docs/NOTIFICATIONS_AND_COMPLIANCE.md)
+- [Smart contract audit notes](docs/SMART_CONTRACT_AUDIT.md)
+
+## Security and Regulatory Notice
+
+Padalix is not represented by this repository as a licensed remittance operator,
+bank, custodian, or payment gateway. Production money movement must use approved
+partners, documented compliance controls, legal review, and jurisdiction-specific
+licensing. Testnet assets and sandbox balances have no monetary value.
+
+Security issues should not be disclosed in a public GitHub issue. Contact the
+project maintainers through [padalix.com](https://padalix.com).
+
+---
+
+<p align="center">
+  <strong><a href="https://padalix.com">Padalix</a></strong><br />
+  Proudly created by <strong>Tomeku</strong> (<a href="https://tomeku.com">Tomeku.com</a>).
+</p>

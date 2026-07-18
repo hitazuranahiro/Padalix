@@ -28,7 +28,7 @@ export function StellarTestnetPayment({ wallets, config, allowed, primary = fals
   const [walletId, setWalletId] = useState(wallets[0]?.id ?? "");
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("1.0000000");
-  const [balanceData, setBalanceData] = useState<{ walletId: string; balances: StellarBalance[] }>({ walletId: "", balances: [] });
+  const [balanceData, setBalanceData] = useState<{ walletId: string; funded: boolean | null; balances: StellarBalance[] }>({ walletId: "", funded: null, balances: [] });
   const [phase, setPhase] = useState<Phase>("idle");
   const [message, setMessage] = useState("");
   const [payment, setPayment] = useState<StellarPayment | null>(null);
@@ -37,6 +37,8 @@ export function StellarTestnetPayment({ wallets, config, allowed, primary = fals
   const busy = ["preparing", "signing", "submitting", "reconciling"].includes(phase);
   const currentBalances = balanceData.walletId === walletId ? balanceData.balances : [];
   const assetBalance = currentBalances.find((item) => item.assetCode === config.assetCode && (config.assetCode === "XLM" || item.issuer === config.issuer));
+  const balanceLoaded = balanceData.walletId === walletId;
+  const sourceFunded = balanceLoaded && balanceData.funded !== false;
 
   useEffect(() => {
     if (!walletId || !config.enabled) {
@@ -45,7 +47,12 @@ export function StellarTestnetPayment({ wallets, config, allowed, primary = fals
     let cancelled = false;
     fetch(`/api/platform/stellar-wallets/${encodeURIComponent(walletId)}/balances`, { cache: "no-store" })
       .then((response) => responseBody<StellarBalanceList>(response))
-      .then((data) => { if (!cancelled) setBalanceData({ walletId, balances: data.balances }); })
+      .then((data) => {
+        if (cancelled) return;
+        const funded = data.funded ?? true;
+        setBalanceData({ walletId, funded, balances: data.balances });
+        if (!funded) setMessage("This wallet is linked but not funded on Stellar testnet. Use Friendbot, then reload the balance.");
+      })
       .catch((error) => { if (!cancelled) setMessage(paymentError(error)); });
     return () => { cancelled = true; };
   }, [walletId, config.enabled]);
@@ -137,7 +144,7 @@ export function StellarTestnetPayment({ wallets, config, allowed, primary = fals
     setIdempotencyKey("");
   }
 
-  const canStart = config.enabled && allowed && Boolean(activeWallet) && /^G[A-Z2-7]{55}$/.test(destination.trim()) && Number(amount) > 0;
+  const canStart = config.enabled && allowed && Boolean(activeWallet) && sourceFunded && /^G[A-Z2-7]{55}$/.test(destination.trim()) && Number(amount) > 0;
   const actionLabel = payment?.status === "prepared" ? "SIGN PREPARED PAYMENT" : payment?.status === "submitted" ? "CHECK CONFIRMATION" : "PREPARE TESTNET PAYMENT";
 
   return (
@@ -157,7 +164,8 @@ export function StellarTestnetPayment({ wallets, config, allowed, primary = fals
           {!wallets.length ? <div className={styles.blocked}><WalletCards size={18} /><span>Link and verify a Stellar testnet wallet first. <Link href="/wallet">Open wallet setup</Link></span></div> : null}
 
           <label><span>SOURCE WALLET</span><select value={walletId} onChange={(event) => { setWalletId(event.target.value); resetPayment(); }} disabled={busy || !wallets.length}>{wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{compact(wallet.publicKey)}</option>)}</select></label>
-          <div className={styles.balance}><span>AVAILABLE {config.assetCode}</span><strong>{balanceData.walletId !== walletId ? "LOADING" : assetBalance ? Number(assetBalance.balance).toLocaleString(undefined, { maximumFractionDigits: 7 }) : "NOT AVAILABLE"}</strong></div>
+          <div className={styles.balance}><span>AVAILABLE {config.assetCode}</span><strong>{!balanceLoaded ? "LOADING" : balanceData.funded === false ? "NOT FUNDED" : assetBalance ? Number(assetBalance.balance).toLocaleString(undefined, { maximumFractionDigits: 7 }) : "NOT AVAILABLE"}</strong></div>
+          {balanceLoaded && balanceData.funded === false && activeWallet ? <div className={styles.blocked}><TriangleAlert size={18} /><span>This account does not exist on Stellar testnet yet. <a href={`https://friendbot.stellar.org/?addr=${encodeURIComponent(activeWallet.publicKey)}`} target="_blank" rel="noreferrer">Fund with Friendbot</a>, then reload this page.</span></div> : null}
           <label><span>DESTINATION STELLAR ACCOUNT</span><input value={destination} onChange={(event) => { setDestination(event.target.value.toUpperCase()); resetPayment(); }} placeholder="G..." spellCheck={false} autoCapitalize="characters" disabled={busy} /></label>
           <label><span>AMOUNT / {config.assetCode}</span><input value={amount} onChange={(event) => { setAmount(event.target.value); resetPayment(); }} inputMode="decimal" disabled={busy} /></label>
           {config.issuer ? <div className={styles.issuer}><span>ASSET ISSUER</span><code>{config.issuer}</code></div> : <div className={styles.issuer}><span>ASSET</span><code>NATIVE XLM / TESTNET</code></div>}

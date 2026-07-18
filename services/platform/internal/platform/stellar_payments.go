@@ -25,6 +25,16 @@ const stellarPaymentTTL = 5 * time.Minute
 
 var stellarAssetCodePattern = regexp.MustCompile(`^[A-Z0-9]{1,12}$`)
 
+var errStellarAccountNotFunded = errors.New("stellar account is not funded")
+
+type stellarHorizonError struct {
+	StatusCode int
+}
+
+func (e *stellarHorizonError) Error() string {
+	return fmt.Sprintf("stellar account lookup returned %d", e.StatusCode)
+}
+
 type StellarPaymentConfig struct {
 	Enabled    bool
 	Network    string
@@ -143,8 +153,11 @@ func (n *rpcStellarPaymentNetwork) Balances(ctx context.Context, address string)
 		return nil, err
 	}
 	defer response.Body.Close()
+	if response.StatusCode == http.StatusNotFound {
+		return nil, errStellarAccountNotFunded
+	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("stellar account lookup returned %d", response.StatusCode)
+		return nil, &stellarHorizonError{StatusCode: response.StatusCode}
 	}
 	var payload struct {
 		Balances []struct {

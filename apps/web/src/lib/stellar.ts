@@ -38,6 +38,7 @@ export type StellarBalance = {
 export type StellarBalanceList = {
   publicKey: string;
   network: "testnet";
+  funded: boolean;
   balances: StellarBalance[];
 };
 
